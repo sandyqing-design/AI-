@@ -1,0 +1,190 @@
+/* style.css (vFinal with Robust Layout) */
+:root {
+    --bg-color: #f0f2f5; --surface-color: #ffffff; --primary-color: #1a73e8;
+    --primary-color-hover: #186bd6; --text-color-primary: #202124; --text-color-secondary: #5f6368;
+    --border-color: #e0e0e0; --font-family: 'Roboto', 'Noto Sans SC', sans-serif;
+    --header-font-weight: 500; --border-radius: 8px;
+    --selection-color: #e8f0fe; --highlight-color: #fff2c2;
+    --danger-color: #d93025; --danger-color-hover: #c5221f;
+    --success-color: #1e8e3e;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+    font-family: var(--font-family); background-color: var(--bg-color); color: var(--text-color-primary);
+    margin: 0; font-size: 14px; line-height: 1.5; height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
+}
+.main-layout { display: flex; flex-direction: column; height: 100vh; }
+.global-header {
+    flex-shrink: 0; display: flex; align-items: center; gap: 1rem;
+    padding: 1rem 1.5rem; background-color: var(--surface-color); border-bottom: 1px solid var(--border-color);
+}
+.global-header .app-title { font-size: 1.25rem; font-weight: var(--header-font-weight); margin-right: 1rem; }
+.status-group { display: flex; align-items: center; gap: 1rem; margin-right: auto; }
+#global-status { font-size: 0.9rem; color: var(--text-color-secondary); }
+.progress-bar { width: 200px; background-color: #e8eaed; border-radius: 4px; overflow: hidden; height: 4px; display: none; }
+.progress-bar-inner { height: 100%; width: 0; background-color: var(--primary-color); transition: width 0.3s ease; }
+.actions-group { display: flex; align-items: center; gap: 0.75rem; }
+
+/* --- Main Content Area --- */
+.main-container {
+    flex-grow: 1; display: grid;
+    gap: 1rem; padding: 1rem; overflow: hidden;
+}
+.main-container.spa-layout { grid-template-columns: 0.8fr 0.8fr 0.8fr 2fr; }
+
+.content-column {
+    background-color: var(--surface-color); border: 1px solid var(--border-color);
+    border-radius: var(--border-radius); padding: 1rem;
+    display: flex; flex-direction: column; overflow: hidden;
+}
+.column-header {
+    font-size: 1rem; font-weight: var(--header-font-weight); margin: 0 0 1rem 0;
+    padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
+}
+.scrollable-content { flex-grow: 1; overflow-y: auto; padding-right: 0.5rem; }
+.column-footer { flex-shrink: 0; margin-top: 1rem; }
+.input-group, .config-group { margin-bottom: 1rem; }
+.input-group label, .config-group label {
+    display: block; margin-bottom: .5rem; font-weight: 500;
+    font-size: 0.875rem; color: var(--text-color-secondary);
+}
+input[type="file"], input[type="text"], select, textarea {
+    width: 100%; padding: 0.5rem; border-radius: 4px;
+    border: 1px solid var(--border-color); background-color: var(--surface-color); font-size: 0.9rem;
+}
+textarea { resize: vertical; }
+.btn {
+    padding: 0.5rem 1rem; border: 1px solid var(--border-color); border-radius: 4px;
+    background-color: var(--surface-color); color: var(--primary-color); cursor: pointer;
+    font-size: 0.875rem; font-weight: 500; transition: background-color 0.2s;
+    text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+}
+.btn:hover:not(:disabled) { background-color: rgba(26, 115, 232, 0.04); }
+.btn.btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); color: #fff; }
+.btn.btn-primary:hover:not(:disabled) { background-color: var(--primary-color-hover); }
+.btn.btn-danger { background-color: var(--danger-color); border-color: var(--danger-color); color: #fff; }
+.btn.btn-danger:hover:not(:disabled) { background-color: var(--danger-color-hover); }
+.btn:disabled { background-color: #f1f3f4; border-color: #f1f3f4; color: #9aa0a6; cursor: not-allowed; }
+a.btn[disabled] { pointer-events: none; }
+.info-list { list-style: none; padding: 0; margin: 0; }
+.info-list li {
+    padding: 0.6rem 0.2rem; border-bottom: 1px solid var(--border-color);
+    display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;
+    transition: background-color 0.2s;
+}
+.info-list li:last-child { border-bottom: none; }
+.info-list .label { flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 1rem;}
+.info-list .value { color: var(--text-color-secondary); }
+.info-list li.selectable { cursor: pointer; }
+.info-list li.selectable:hover { background-color: #f8f9fa; }
+.info-list li.selected { background-color: var(--selection-color); }
+.info-list input[type="checkbox"] { margin-right: 0.75rem; }
+
+/* Chapter List Specific */
+#col1-content-wrapper { /* This wrapper is the key flex container */
+    flex-grow: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.chapter-controls { /* This holds the fixed controls */
+    flex-shrink: 0; /* Prevents it from shrinking */
+    padding-bottom: 0.5rem;
+}
+
+#chapter-list-wrapper { 
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    flex-grow: 1; 
+    overflow-y: auto; 
+    min-height: 150px; 
+}
+#chapter-list li.processed .label {
+    font-style: normal;
+    color: var(--primary-color);
+}
+#chapter-list li.processed .label::after {
+    content: '📄';
+    margin-left: 8px;
+    font-weight: bold;
+}
+
+/* Character Config Color Coding & Profile Button */
+.info-list .character-row { transition: background-color: 0.3s ease; }
+.timbre-color-1 { background-color: #e8f0fe !important; }
+.timbre-color-2 { background-color: #e6f4ea !important; }
+.timbre-color-3 { background-color: #fef7e0 !important; }
+.timbre-color-4 { background-color: #fce8e6 !important; }
+.timbre-color-5 { background-color: #f3e8fd !important; }
+.timbre-color-6 { background-color: #e0f2f1 !important; }
+.info-list li.selected[class*="timbre-color-"] { box-shadow: inset 3px 0 0 0 var(--primary-color); }
+.btn-profile {
+    width: 20px; height: 20px; font-size: 11px;
+    font-style: italic; font-weight: bold;
+    border-radius: 50%; padding: 0;
+    margin-right: 0.5rem;
+}
+.placeholder-text { color: #9aa0a6; text-align: center; padding: 2rem; }
+
+#chapter-list li.spliced .label {
+    /* Use a different color to distinguish from 'processed' */
+    color: var(--success-color);
+    font-weight: 500; /* Make it bolder */
+}
+
+#chapter-list li.spliced .label::after {
+    /* Change the icon to something else, e.g., a music note */
+    content: '🔈';
+    color: var(--success-color);
+    margin-left: 8px;
+    font-weight: bold;
+    font-style: normal; /* Override italic from 'processed' if both are present */
+}
+/* （可选）当一个已拼接的行同时也是已处理的时，我们可能不希望它显示绿色的对勾 */
+/* 这条规则会确保音乐符号 '🔈' 的优先级更高 */
+#chapter-list li.processed.spliced .label::after {
+    content: '🔈'; 
+}
+
+/* Filter Modal */
+.filter-options {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.filter-group fieldset {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    margin: 0;
+}
+.filter-group legend {
+    font-weight: 500;
+    padding: 0 0.5rem;
+}
+.radio-group {
+    display: flex;
+    gap: 1.5rem;
+}
+.radio-group label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+.range-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.range-group input {
+    width: 60px;
+    text-align: center;
+}
+.filter-btn-active {
+    background-color: var(--selection-color) !important;
+    border-color: var(--primary-color) !important;
+}

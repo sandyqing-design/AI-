@@ -1,0 +1,4203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 语音工作室 Pro (一体化工作台)</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .main-container.spa-layout { grid-template-columns: 0.8fr 0.8fr 0.8fr 1.8fr; }
+        .readonly-timbre { padding: 0.5rem; background-color: #f8f9fa; border: 1px solid transparent; border-radius: 4px; font-size: 0.9rem; color: var(--text-color-secondary); }
+        .actions-cell, .character-actions, .timbre-actions { display: flex; align-items: center; gap: 0.5rem; }
+        
+		.actions-cell {
+			display: flex; /* 确保它是一个flex容器 */
+			flex-direction: column;
+			gap: 0.5rem; /* 为两行之间设置一个标准的垂直间距 */
+		}
+        .action-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-start;}
+        .audio-player-btn, .btn-show-roles, .btn-settings {
+            width: 24px; height: 24px; cursor: pointer; border-radius: 50%;
+            background-color: transparent; color: var(--text-color-secondary); border: 1px solid transparent;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; padding: 0; flex-shrink: 0; transition: background-color 0.2s, color 0.2s;
+        }
+        .btn-show-roles { font-size: 12px; }
+        .audio-player-btn:hover:not(:disabled), .btn-show-roles:hover, .btn-settings:hover { background-color: #e8f0fe; color: var(--primary-color); }
+        .btn-assign { padding: 0.2rem 0.6rem; font-size: 0.75rem; }
+        .popover-container { position: relative; }
+        .popover-content {
+            display: none; position: absolute; right: 105%; top: 50%; transform: translateY(-50%); width: max-content;
+            background-color: #333; color: white; padding: 0.5rem; border-radius: var(--border-radius); z-index: 10;
+            font-size: 0.85rem; line-height: 1.4; box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .popover-content ul { list-style: none; padding: 0; margin: 0; }
+        .popover-content li { padding: 0.2rem 0; }
+        .btn-show-roles:focus + .popover-content, .popover-container:focus-within .popover-content { display: block; }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5); display: none;
+            align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal-content { background-color: var(--surface-color); padding: 2rem; border-radius: var(--border-radius); width: 90%; max-width: 500px; }
+        .modal-header { font-size: 1.2rem; margin-bottom: 1.5rem; }
+        .modal-actions { margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem; }
+        .mode-select { max-width: 80px; }
+        .instruct-input { margin-top: 0.5rem; font-size: 0.85rem; padding: 0.4rem; display: none; }
+        .character-actions .value { text-align: right; }
+        #profileModalBody dl { margin: 0; }
+        #profileModalBody dt { font-weight: bold; color: var(--text-color-secondary); margin-top: 0.75rem; }
+        #profileModalBody dd { margin-left: 0; margin-bottom: 0.75rem; }
+		#dialogueModalBody ul {
+			list-style: none;
+			padding: 0;
+			margin: 0;
+		}
+		#dialogueModalBody li {
+			padding: 0.75rem;
+			border-bottom: 1px solid var(--border-color);
+			line-height: 1.6;
+		}
+		#dialogueModalBody li:last-child {
+			border-bottom: none;
+		}
+		#dialogueModalBody .dialogue-source {
+			display: block;
+			font-size: 0.8rem;
+			color: var(--text-color-secondary);
+			font-style: italic;
+			margin-bottom: 0.25rem;
+		}
+        /* *** 核心修改：添加以下新规则 *** */
+        .content-table .actions-cell .btn {
+            padding: 0.2rem 0.6rem; /* 减小内边距 (上下 0.2rem, 左右 0.6rem) */
+            font-size: 0.8rem;      /* 减小字体大小 */
+            height: 26px;           /* 固定一个较小的高度 */
+        }
+
+        .content-table .actions-cell .mode-select {
+            padding: 0.2rem;        /* 减小下拉框的内边距 */
+            font-size: 0.8rem;      /* 减小字体大小 */
+            height: 26px;           /* 与按钮高度保持一致 */
+            max-width: 70px;        /* 可以适当减小最大宽度 */
+        }
+
+		/* 1. Popover 的外层容器 */
+		.popover-container {
+			position: relative; /* 必须，为内部绝对定位的 popover-content 提供基准 */
+		}
+
+		/* 2. Popover 的内容区域（通用样式） */
+		.popover-content {
+			display: none; /* 默认隐藏 */
+			position: absolute;
+			z-index: 10;
+			
+			/* 统一样式：白色背景、边框、圆角、阴影 */
+			background-color: var(--surface-color);
+			border: 1px solid var(--border-color);
+			border-radius: var(--border-radius);
+			box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+			
+			/* 统一样式：内边距和最小宽度 */
+			padding: 0.5rem;
+			min-width: 180px; /* 设置一个合适的最小宽度 */
+
+			/* 文字样式 */
+			font-size: 0.875rem;
+			color: var(--text-color-primary);
+			text-align: left;
+			
+			/* 动画效果 */
+			opacity: 0;
+			transform: translateY(5px);
+			transition: opacity 0.2s ease, transform 0.2s ease;
+			pointer-events: none;
+		}
+
+		/* 3. 触发 Popover 显示的逻辑 */
+		.popover-container:focus-within .popover-content {
+			display: block;
+			opacity: 1;
+			transform: translateY(0);
+			pointer-events: auto;
+		}
+
+		/* 4. Popover 内部的列表样式 */
+		.popover-content ul {
+			list-style: none;
+			padding: 0;
+			margin: 0;
+			color: var(--text-color-primary);
+		}
+		.popover-content li {
+			padding: 0.25rem 0.5rem; /* 调整列表项的间距 */
+		}
+
+		/* 5. 特别为“已分配角色”的 popover 增加一点标题样式 */
+		.popover-content strong {
+			display: block;
+			margin-bottom: 0.5rem;
+			padding-bottom: 0.5rem;
+			border-bottom: 1px solid var(--border-color);
+			font-weight: 500;
+		}
+
+		/* 6. (保留) Popover 内部的菜单按钮样式 (用于特效菜单和分类移动菜单) */
+		.popover-content li button {
+			display: block;
+			width: 100%;
+			padding: 0.5rem 0.75rem;
+			border: none;
+			background: none;
+			cursor: pointer;
+			text-align: left;
+			color: var(--text-color-primary);
+			transition: background-color 0.2s;
+			border-radius: 4px;
+		}
+		.popover-content li button:hover {
+			background-color: var(--selection-color);
+		}
+				
+		/* 3. (可选但推荐) 统一两种不同popover的样式，让“查看关联角色”也变好看 */
+		#timbre-list .popover-content {
+			background-color: var(--surface-color);
+			border: 1px solid var(--border-color);
+			border-radius: var(--border-radius);
+			box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+			padding: 0.5rem;
+			min-width: 150px;
+			text-align: left; /* 确保文字左对齐 */
+		}
+		#timbre-list .popover-content ul {
+			padding-left: 0;
+		}
+		
+		/* *** 核心修改 1: 添加高亮样式 *** */
+        /* 针对行首的操作按钮 (X 和 +) */
+        .content-table .row-actions .btn {
+            width: 24px;         /* 设置一个固定的宽度 */
+            height: 24px;        /* 设置一个固定的高度，使其变为方形 */
+            padding: 0;          /* 移除所有内边距 */
+            font-size: 1rem;     /* 可以适当调整字体大小来控制符号大小 */
+            line-height: 22px;   /* 尝试让符号垂直居中 */
+            text-align: center;
+        }
+		.content-table tbody tr.highlighted-row {
+			background-color: var(--highlight-color); /* 使用我们在:root中定义的全局高亮色 */
+			transition: background-color 0.3s ease;
+		}
+		/* 可选：为高亮行的单元格添加一个左边框，使其更醒目 */
+		.content-table tbody tr.highlighted-row td:first-child {
+			border-left: 3px solid var(--primary-color);
+		}
+		.settings-container {
+			display: flex;
+			padding: 1.5rem 2rem;
+		}
+		.settings-tabs {
+			display: flex;
+			flex-direction: column;
+			gap: 0.5rem;
+			border-right: 1px solid var(--border-color);
+			padding-right: 1.5rem;
+			flex-shrink: 0;
+		}
+		.settings-tabs .tab-link {
+			border: none;
+			background: none;
+			padding: 0.5rem 1rem;
+			cursor: pointer;
+			text-align: left;
+			border-radius: 4px;
+			font-size: 0.9rem;
+			color: var(--text-color-secondary);
+			transition: background-color 0.2s, color 0.2s;
+			min-width: 120px;
+		}
+		.settings-tabs .tab-link:hover {
+			background-color: #f1f3f4;
+		}
+		.settings-tabs .tab-link.active {
+			background-color: var(--selection-color);
+			color: var(--primary-color);
+			font-weight: 500;
+		}
+		.settings-content {
+			padding-left: 1.5rem;
+			flex-grow: 1;
+		}
+		.tab-content {
+			display: none;
+		}
+		.tab-content.active {
+			display: block;
+		}
+		.config-group.inline-group {
+			display: flex;
+			align-items: center; /* 垂直居中对齐 */
+			gap: 0.75rem;      /* 标签和输入框之间的间距 */
+		}
+
+		.config-group.inline-group label {
+			margin-bottom: 0; /* 移除 label 默认的下边距 */
+			flex-shrink: 0;   /* 防止标签文字在空间不足时被压缩换行 */
+		}
+
+		.config-group.inline-group select,
+		.config-group.inline-group input,
+		.config-group.inline-group .btn-group { /* 增加对按钮组的支持 */
+			flex-grow: 1; /* 让输入框或下拉框占据所有剩余空间 */
+		}
+				
+		.timbre-override-select .placeholder-option {
+			color: #80868b; /* 一种柔和的灰色 */
+			font-style: italic; /* 斜体 */
+		}
+			
+		.player-modal-body {
+			display: flex;
+			flex-direction: column;
+			gap: 1.5rem; /* 控件和时间线之间的间距 */
+			padding: 1rem 0;
+		}
+
+		.player-controls {
+			display: flex;
+			justify-content: center;
+		}
+
+		#playerPlayPauseBtn {
+			width: 50px;
+			height: 50px;
+			border-radius: 50%;
+			font-size: 24px;
+			padding: 0;
+			line-height: 50px; /* 确保图标垂直居中 */
+		}
+
+		.player-timeline {
+			display: flex;
+			align-items: center;
+			gap: 1rem; /* 时间和进度条之间的间距 */
+		}
+
+		.time-display {
+			font-size: 0.9rem;
+			color: var(--text-color-secondary);
+			font-variant-numeric: tabular-nums;
+		}
+
+		.progress-bar-slider {
+			flex-grow: 1;
+			-webkit-appearance: none;
+			appearance: none;
+			width: 100%;
+			height: 5px;
+			background: #ddd;
+			outline: none;
+			border-radius: 2.5px;
+			cursor: pointer;
+		}
+
+		.progress-bar-slider::-webkit-slider-thumb {
+			-webkit-appearance: none;
+			appearance: none;
+			width: 16px;
+			height: 16px;
+			background: var(--primary-color);
+			border-radius: 50%;
+			margin-top: -5.5px;
+		}
+
+		.progress-bar-slider::-moz-range-thumb {
+			width: 16px;
+			height: 16px;
+			background: var(--primary-color);
+			border-radius: 50%;
+			border: none;
+		}
+		.audio-player-btn.playable {
+			color: var(--primary-color); /* 将图标颜色设为主题蓝色 */
+			cursor: pointer;
+		}
+
+		.audio-player-btn.playable:hover {
+			background-color: #e8f0fe; /* 鼠标悬停时，使用淡蓝色背景（与音色库按钮悬停效果一致） */
+			transform: scale(1.1); /* （可选）轻微放大效果，增强交互感 */
+		}
+		
+		/* ---为内容编辑器表格行添加边框和内边距 --- */
+		.content-table tbody td {
+			padding-top: 0.75rem;     /* 增加顶部内边距 */
+			padding-bottom: 0.75rem;  /* 增加底部内边距，拉开行间距 */
+			border-bottom: 1px solid var(--border-color); /* 在每行下方添加一条分割线 */
+			vertical-align: middle; /* 确保单元格内容垂直居中，使按钮和文本对齐更好看 */
+		}
+
+		/* 移除最后一行多余的边框，使表格底部更整洁 */
+		.content-table tbody tr:last-child td {
+			border-bottom: none;
+		}
+		
+		/* 1. Popover菜单的通用样式增强 */
+		.popover-content ul {
+			list-style: none;
+			padding: 0;
+			margin: 0;
+		}
+		.popover-content li button {
+			display: block;
+			width: 100%;
+			padding: 0.5rem 1rem;
+			border: none;
+			background: none;
+			cursor: pointer;
+			text-align: left;
+			color: var(--text-color-primary);
+			transition: background-color 0.2s;
+		}
+		.popover-content li button:hover {
+			background-color: var(--selection-color);
+		}
+
+		/* 2. 为新的分类移动菜单设置最小宽度 */
+		.category-menu {
+			min-width: 150px;
+			max-height: 900px;
+			overflow-y: auto;
+		}
+
+		/* 3. 为旧的“分配”按钮重命名class，避免冲突 */
+		/*    这个按钮在角色列表（第二列）中使用 */
+		.btn-assign-char {
+			padding: 0.2rem 0.6rem;
+			font-size: 0.75rem;
+		}
+			
+    </style>
+</head>
+<body>
+<div class="main-layout">
+    <!-- Global Header -->
+    <header class="global-header">
+        <h1 class="app-title">AI 语音工作室 Pro</h1>
+        <div class="status-group">
+            <p id="global-status">欢迎使用！请在左侧选择或上传小说以开始。</p>
+            <div id="global-progress" class="progress-bar"><div class="progress-bar-inner"></div></div>
+        </div>
+        <div class="actions-group">
+			<button id="processTxtBtn" class="btn" disabled>处理文本</button>
+            <button id="processAllBtn" class="btn btn-primary" disabled>生成声音</button>
+            <button id="downloadSpliceBtn" class="btn" disabled>下载声音</button>
+            <button id="settingsBtn" class="btn-settings" title="全局设置">⚙️</button>
+        </div>
+    </header>
+
+    <!-- 4-Column Workspace -->
+    <main class="main-container spa-layout">
+        <!-- Column 1: Novel Management & Processing -->
+		<div class="content-column">
+			<h2 class="column-header">小说管理与处理</h2>
+			
+            <div style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: flex-end;">
+                <!-- 左侧：模型选择 (已修改为行内布局) -->
+                <div class="config-group inline-group" style="flex: 1;">
+                    <label for="llmModelSelector">选择处理模型</label>
+                    <select id="llmModelSelector">
+                        <option value="gemini-1.5-flash">Gemini Flash</option>
+                        <option value="qwen-plus">通义千问 Plus</option>
+                    </select>
+                </div>
+                <!-- 右侧：上传按钮 -->
+				<div class="config-group" style="flex: 0.6;">
+					<button id="uploadTxtLabelBtn" class="btn" style="width: 100%; justify-content: center;">上传新小说</button>
+					<input type="file" id="novelTxtFile" accept=".txt" style="display: none;">
+				</div>
+            </div>
+			<div class="config-group inline-group">
+				<label for="novelSelector">选择小说项目</label>
+                <div class="btn-group" style="display: flex; gap: 0.5rem; width: 100%;">
+				    <select id="novelSelector" style="flex-grow: 1;"><option>正在加载...</option></select>
+                    <button id="deleteNovelBtn" class="btn btn-danger" title="删除当前选中的小说项目" disabled style="padding: 0.5rem; flex-shrink: 0;">🗑️</button>
+                </div>
+			</div>
+			<hr style="border: none; border-top: 1px solid var(--border-color); margin: 1rem 0;">
+			
+			<!-- NEW: This wrapper will contain everything that scrolls -->
+			<div id="col1-content-wrapper" class="scrollable-content">
+				<!-- This is now the fixed controls container -->
+				<div class="chapter-controls">
+					<div class="config-group">
+						<label>章节列表 (可多选)</label>
+						<div class="controls" style="display: flex; gap: 0.5rem;">
+							<button id="selectAllChaptersBtn" class="btn">全选</button>
+							<button id="selectNoneChaptersBtn" class="btn">全不选</button>
+							<button id="filterBtn" class="btn" style="margin-left: auto;">过滤 🔍</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- This wrapper will now scroll -->
+				<div id="chapter-list-wrapper">
+					<ul id="chapter-list" class="info-list">
+						<p class="placeholder-text">请先选择或上传小说</p>
+					</ul>
+				</div>
+			</div>
+		</div>
+
+        <!-- Column 2: Character-Timbre Configuration -->
+		<div class="content-column">
+			<h2 class="column-header">角色-音色配置</h2>
+			
+
+			<div id="character-list" class="scrollable-content info-list">
+				 <p class="placeholder-text">请在左侧选择章节</p>
+			</div>
+			 <div class="column-footer" style="display:flex; justify-content: space-between;">
+                 <!-- *** 核心修改 1: 添加新按钮 *** -->
+                 <button id="manageCharactersBtn" class="btn" disabled>角色名管理</button>
+                 <button id="manageReplaceDictBtn" class="btn" disabled>管理替换词典</button>
+				 <button id="saveConfigBtn" class="btn btn-primary" disabled>保存当前配置</button>
+			 </div>
+		</div>
+
+		<!-- Column 3: Timbre Library -->
+		<div class="content-column">
+			<h2 class="column-header">
+				<span>音色库</span>
+				<div class="controls" style="display: flex; align-items: center; gap: 0.5rem;">
+					<select id="categoryFilter" style="font-size: 0.8rem; max-width: 150px;">
+						<!-- JS动态生成 -->
+					</select>
+				</div>
+			</h2>
+			<div id="timbre-list" class="scrollable-content info-list">
+				<p class="placeholder-text">正在加载音色...</p>
+			</div>
+			<div class="column-footer" style="display: flex; justify-content: space-between;">
+				<button id="manageTimbresBtn" class="btn">管理音色库</button>
+				<button id="uploadTimbreLabelBtn" class="btn">上传新音色</button>
+				<input type="file" id="timbreFile" accept="audio/*" style="display: none;">
+			</div>
+		</div>
+		
+		<!-- Column 4: Content Editor -->
+		<div class="content-column">
+			<h2 id="content-title" class="column-header">
+				<span id="editor-title-text">内容编辑器</span>
+				<button id="chapterPlayStopBtn" class="btn" disabled style="margin-left: auto;">▶️ 播放章节</button>
+			</h2>
+			<div id="editor-view" class="scrollable-content">
+				<p class="placeholder-text">请在左侧选择一个已处理章节以显示内容。</p>
+				<div id="raw-text-view" style="display: none;">
+					<h4 id="raw-text-title" style="margin-top: 0;"></h4>
+					<pre id="raw-text-content" class="scrollable-content" style="white-space: pre-wrap; word-wrap: break-word; font-family: 'Noto Sans SC', sans-serif; height: calc(100% - 30px); background-color: #f8f9fa; padding: 1rem; border-radius: 4px;"></pre>
+				</div>
+				<table class="content-table" style="display:none;">
+					<thead>
+						<tr>
+							<th style="width: 3%;">操作</th> <!-- Adjusted width -->
+							<th style="width: 4%;">#</th>
+							<th style="width: 12%;">角色</th>
+							<th style="width: 15%;">音色</th>
+							<th>内容</th>
+							<th style="width: 12%;">TTS模型</th> 
+							<th style="width: 15%;">操作</th>
+						</tr>
+					</thead>
+					<tbody id="content-table-body"></tbody>
+				</table>
+			</div>
+			<div id="batch-view" class="scrollable-content" style="display: none; align-items: center; justify-content: center;">
+				 <p class="placeholder-text" id="batch-view-message" style="font-size: 1.1rem;"></p>
+			</div>
+			<!-- NEW: Footer for save button -->
+			<div class="column-footer" id="editor-footer" style="display: none;">
+				<div style="display:flex; justify-content: space-between; align-items: center;">
+					 <button id="addRowStartBtn" class="btn">添加新行到首行</button>
+					 <button id="saveChapterBtn" class="btn btn-primary" disabled>保存对本章节的修改</button>
+				</div>
+			</div>
+		</div>
+    </main>
+</div>
+
+<!-- Modals -->
+<div id="timbreUploadModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="modal-header">上传新音色</h3>
+        <div class="input-group"><label for="newTimbreName">音色名称</label><input type="text" id="newTimbreName"></div>
+		<div class="input-group">
+			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+				<label for="newTimbreText" style="margin: 0;">参考文本</label>
+                <div class="btn-group" style="display: flex; gap: 0.5rem; align-items: center;">
+				    <button id="previewUploadBtn" class="audio-player-btn" title="试听上传的音频" disabled style="width: 28px; height: 28px;">▶</button>
+					<!-- 默认隐藏自动识别按钮 -->
+					<button id="transcribeBtn" class="btn" disabled style="display: none;">自动识别</button>
+                </div>
+			</div>
+			<textarea id="newTimbreText" rows="4"></textarea>
+		</div>
+		<div class="input-group">
+			<label for="uploadTimbreCategory">选择分类 (可选)</label>
+			<select id="uploadTimbreCategory">
+				<option value="">-- 不归类 --</option>
+			</select>
+		</div>
+        <div class="input-group"> <!-- 将其包装在 input-group 中，样式更一致 -->
+            <label for="normalizeVolume" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; margin-bottom: 0;">
+                <span>音量标准化</span>
+                <input type="checkbox" id="normalizeVolume" checked style="width: auto; height: auto; margin-left: 0.5rem;">
+            </label>
+        </div>
+        <div class="modal-actions"><button id="cancelUploadBtn" class="btn">取消</button><button id="confirmUploadBtn" class="btn btn-primary">确认</button></div>
+    </div>
+</div>
+<div id="profileModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="profileModalTitle" class="modal-header">角色简介</h3>
+        <div id="profileModalBody">正在加载...</div>
+        <div class="modal-actions"><button id="profileModalCloseBtn" class="btn">关闭</button></div>
+    </div>
+</div><div id="globalSettingsModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 700px; padding: 0;">
+        <div class="modal-header" style="padding: 1.5rem 2rem 1rem 2rem; border-bottom: 1px solid var(--border-color);">
+            <h3 style="margin: 0;">全局设置</h3>
+        </div>
+
+        <div class="settings-container">
+            <!-- 标签页导航 -->
+            <nav class="settings-tabs">
+                <button class="tab-link active" data-tab="tab-general">通用设置</button>
+                <button class="tab-link" data-tab="tab-models">LLM模型配置</button>
+				<button class="tab-link" data-tab="tab-tts">TTS模型配置</button>
+                <button class="tab-link" data-tab="tab-audio-export">音频导出</button>
+            </nav>
+
+            <!-- 内容面板 -->
+            <div class="settings-content">
+                <!-- 通用设置面板 -->
+                <div id="tab-general" class="tab-content active">
+                    <fieldset style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem; margin-bottom: 1rem;">
+                        <legend style="font-weight: 500;">默认模型</legend>
+                        <div class="config-group">
+                            <label for="settingsDefaultModel">处理新章节时默认使用的模型</label>
+                            <select id="settingsDefaultModel">
+                                <!-- 选项将由JS动态生成 -->
+                            </select>
+                        </div>
+                    </fieldset>
+					<fieldset style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem; margin-bottom: 1rem;">
+						<legend style="font-weight: 500;">默认 TTS模型</legend>
+						<div class="config-group">
+							<label for="settingsDefaultTtsModel">生成语音时默认使用的 TTS模型</label>
+							<select id="settingsDefaultTtsModel">
+								<!-- 选项将由JS动态生成 -->
+							</select>
+						</div>
+					</fieldset>
+                    <fieldset style="border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem;">
+                        <legend style="font-weight: 500;">代理服务器 (Proxy)</legend>
+                        <div class="config-group inline-group" style="margin-bottom: 1.5rem;">
+                            <label for="settingsProxyEnabled">启用代理</label>
+                            <input type="checkbox" id="settingsProxyEnabled" style="width: auto; height: auto;">
+                        </div>
+                        <div id="proxy-details-group" style="display: none;">
+                            <div class="config-group">
+                                <label for="settingsProxyProtocol">协议</label>
+                                <select id="settingsProxyProtocol">
+                                    <option value="socks5h">SOCKS5 (socks5h)</option>
+                                    <option value="http">HTTP</option>
+                                    <option value="https">HTTPS</option>
+                                </select>
+                            </div>
+                            <div class="config-group">
+                                <label for="settingsProxyAddress">地址</label>
+                                <input type="text" id="settingsProxyAddress" placeholder="e.g., 127.0.0.1">
+                            </div>
+                            <div class="config-group">
+                                <label for="settingsProxyPort">端口</label>
+                                <input type="text" id="settingsProxyPort" placeholder="e.g., 1080">
+                            </div>
+                        </div>
+                    </fieldset>
+                </div>
+
+                <!-- 模型配置面板 -->
+                <div id="tab-models" class="tab-content">
+                    <p style="font-size: 0.85rem; color: var(--text-color-secondary); margin-top: 0; margin-bottom: 1.5rem;">
+                        在此配置用于处理章节的AI模型的API Key和参数。配置将保存在服务器。
+                    </p>
+                    <div id="llmSettingsForm">
+                        <p class="placeholder-text">正在加载配置...</p>
+                    </div>
+                </div>
+				
+				<div id="tab-tts" class="tab-content">
+					<p style="font-size: 0.85rem; color: var(--text-color-secondary); margin-top: 0; margin-bottom: 1.5rem;">
+						在此配置用于生成语音的TTS（文本转语音）服务的地址和显示名称。
+					</p>
+					<div id="ttsSettingsForm">
+						<p class="placeholder-text">正在加载配置...</p>
+					</div>
+				</div>
+
+                <!-- 音频导出面板 -->
+                <div id="tab-audio-export" class="tab-content">
+                    <div class="input-group">
+                        <label for="exportFormat">音频格式</label>
+                        <select id="exportFormat">
+                            <option value="mp3">MP3</option>
+                            <option value="wav">WAV</option>
+                            <option value="m4a">M4A (AAC)</option>
+                            <option value="ogg">OGG</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label for="exportQuality">音频质量</label>
+                        <select id="exportQuality"></select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-actions" style="padding: 1rem 2rem 1.5rem 2rem; border-top: 1px solid var(--border-color); background-color: #f8f9fa;">
+            <button id="globalSettingsCloseBtn" class="btn">关闭</button>
+            <button id="globalSettingsSaveBtn" class="btn btn-primary">保存全部设置</button>
+        </div>
+    </div>
+</div>
+<div id="filterModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="modal-header">章节过滤器</h3>
+        <div class="filter-options">
+            <div class="filter-group">
+                <fieldset>
+                    <legend>按状态过滤</legend>
+                    <div class="radio-group">
+                        <label><input type="radio" name="filterStatus" value="all" checked> 显示全部</label>
+                        <label><input type="radio" name="filterStatus" value="processed"> 只显示已处理</label>
+                        <label><input type="radio" name="filterStatus" value="unprocessed"> 只显示未处理</label>
+                    </div>
+                </fieldset>
+            </div>
+            <div class="filter-group">
+                 <fieldset>
+                    <legend>按范围过滤 (基于列表顺序)</legend>
+                    <div class="range-group">
+                        <label for="rangeStart">从第</label>
+                        <input type="number" id="rangeStart" min="1" placeholder="起始">
+                        <label for="rangeEnd">到第</label>
+                        <input type="number" id="rangeEnd" min="1" placeholder="结束">
+                        <span>章</span>
+                    </div>
+                </fieldset>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button id="clearFilterBtn" class="btn">清除过滤</button>
+            <button id="applyFilterBtn" class="btn btn-primary">应用过滤</button>
+        </div>
+    </div>
+</div>
+<div id="dialogueModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 600px;">
+        <h3 id="dialogueModalTitle" class="modal-header">角色对话预览</h3>
+        <div id="dialogueModalBody" class="scrollable-content" style="max-height: 60vh; background-color: #f8f9fa; padding: 1rem; border-radius: var(--border-radius);">
+            <!-- 对话内容将动态插入这里 -->
+        </div>
+        <div class="modal-actions">
+            <button id="dialogueModalCloseBtn" class="btn">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- NEW CHORAL EFFECT MODAL START -->
+<div id="choralModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="choralModalTitle" class="modal-header">选择参与“多人同声”的音色</h3>
+        <div id="choralTimbreList" class="scrollable-content" style="max-height: 50vh; border: 1px solid var(--border-color); padding: 0.5rem;">
+            <!-- 音色列表将动态插入这里 -->
+        </div>
+        <div class="modal-actions">
+            <button id="cancelChoralBtn" class="btn">取消</button>
+            <button id="confirmChoralBtn" class="btn btn-primary">确认生成</button>
+        </div>
+    </div>
+</div>
+<!-- NEW CHORAL EFFECT MODAL END -->
+
+<div id="replaceDictModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 700px; display: flex; flex-direction: column; height: 80vh;">
+        <h3 class="modal-header">小说专属替换词典 (<span id="replaceDictNovelName"></span>)</h3>
+        <div class="replace-dict-body" style="flex-grow: 1; display: flex; flex-direction: column; overflow: hidden;">
+            <div class="input-group" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                <input type="text" id="newOriginalWord" class="form-control" placeholder="原词 (例如: 行长)" style="flex: 1;">
+                <input type="text" id="newReplacementWord" class="form-control" placeholder="替换为 (例如: hang长)" style="flex: 1;">
+                <input type="text" id="newDescription" class="form-control" placeholder="描述 (可选)" style="flex: 1;">
+                <button id="addReplaceRuleBtn" class="btn btn-primary" style="flex-shrink: 0;">添加规则</button>
+            </div>
+            <div class="search-group" style="margin-bottom: 1rem;">
+                <input type="text" id="replaceRuleSearchInput" class="form-control" placeholder="搜索规则..." style="width: 100%;">
+            </div>
+            <div id="replaceRulesList" class="scrollable-content info-list" style="flex-grow: 1; border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem;">
+                <!-- 替换规则列表将动态加载到这里 -->
+                <p class="placeholder-text">暂无替换规则</p>
+            </div>
+        </div>
+        <div class="modal-actions" style="margin-top: 1rem;">
+            <button id="closeReplaceDictBtn" class="btn">关闭</button>
+        </div>
+    </div>
+</div>
+
+<div id="deleteNovelModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 500px;">
+        <h3 class="modal-header" style="color: var(--danger-color);">确认永久删除</h3>
+        <p>此操作将永久删除小说项目 <strong id="novelToDeleteName"></strong> 的所有相关文件，包括章节、配置和已生成的音频文件。</p>
+        <p>此操作**不可撤销**。</p>
+        <div class="input-group">
+            <label for="deleteConfirmInput">请输入“<b style="user-select: none;">删除</b>”以确认：</label>
+            <input type="text" id="deleteConfirmInput" placeholder="删除">
+        </div>
+        <div class="modal-actions">
+            <button id="cancelDeleteBtn" class="btn">取消</button>
+            <button id="confirmDeleteBtn" class="btn btn-danger" disabled>确认删除</button>
+        </div>
+    </div>
+</div>
+
+<div id="charManageModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 800px; display: flex; flex-direction: column; height: 80vh;">
+        <h3 class="modal-header">角色名管理与合并</h3>
+        <div style="display: flex; flex-grow: 1; gap: 1rem; overflow: hidden;">
+            <!-- Left Panel: Character List -->
+            <div style="flex: 1; display: flex; flex-direction: column; border: 1px solid var(--border-color); border-radius: 4px;">
+                <div style="padding: 0.5rem; border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
+                    <input type="text" id="charSearchInput" placeholder="搜索角色名...">
+                </div>
+                <div id="charManageList" class="scrollable-content" style="padding: 0.5rem;">
+                    <!-- Character list will be populated here -->
+                </div>
+            </div>
+            <!-- Right Panel: Merge Controls -->
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 1rem;">
+                <h4>合并选中的角色</h4>
+                <div class="input-group">
+                    <label>1. 以下角色将被合并 (至少选择2个):</label>
+                    <div id="charsToMerge" style="min-height: 100px; border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem; background-color: #f8f9fa;"></div>
+                </div>
+                <div class="input-group">
+                    <label for="targetCharSelect">2. 选择一个作为主角色名:</label>
+                    <select id="targetCharSelect" disabled></select>
+                </div>
+                <button id="confirmMergeBtn" class="btn btn-primary" disabled style="margin-top: auto;">确认合并</button>
+            </div>
+        </div>
+        <div class="modal-actions" style="margin-top: 1rem;">
+            <button id="closeCharManageBtn" class="btn">关闭</button>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // === 1. STATE MANAGEMENT ===
+    let state = {
+        novelName: '', isTxtMode: false, txtChapters: [], selectedChapterPaths: [],
+        characterMapping: {}, allTimbres: [], selectedCharacter: null, novelData: [],
+        generatedFiles: {}, isProcessing: false, isProcessingCancelled: false,
+		isTxtProcessing: false, isTxtProcessingCancelled: false, // 
+        selectedLLM: 'gemini-2.5-flash',
+		globalAudioPlayer: null, // 用于章节播放
+		simpleAudioPlayer: null, // 用于单句和音色试听
+		activeSimplePlayerButton: null, // 追踪当前激活的简单播放按钮
+        currentBlobURL: null, 
+		allNovelsData: {}, 
+		timbreDetails: {}, 
+		fileToUpload: null,
+        lastCheckedIndex: -1,
+		globalConfig: {}, // stores the entire config from backend
+        screenWakeLock: null, // 
+		filter: {
+			status: 'all', // 'all', 'processed', 'unprocessed'
+			start: null,   // 1-based index
+			end: null      // 1-based index
+		},
+        replaceDict: []// 小说专属替换规则
+    };
+    const timbreColorClasses = ['timbre-color-1', 'timbre-color-2', 'timbre-color-3', 'timbre-color-4', 'timbre-color-5', 'timbre-color-6'];
+
+    // === 2. DOM ELEMENTS ===
+    const dom = {
+        novelSelector: document.getElementById('novelSelector'), novelTxtFile: document.getElementById('novelTxtFile'),
+        chapterListEl: document.getElementById('chapter-list'), selectAllChaptersBtn: document.getElementById('selectAllChaptersBtn'),
+        selectNoneChaptersBtn: document.getElementById('selectNoneChaptersBtn'), processTxtBtn: document.getElementById('processTxtBtn'),
+        characterListEl: document.getElementById('character-list'),
+        saveConfigBtn: document.getElementById('saveConfigBtn'), timbreListEl: document.getElementById('timbre-list'),
+        uploadTimbreLabelBtn: document.getElementById('uploadTimbreLabelBtn'), timbreFile: document.getElementById('timbreFile'),
+        editorView: document.getElementById('editor-view'),
+        contentTable: document.querySelector('.content-table'), contentTableBody: document.getElementById('content-table-body'),
+        batchView: document.getElementById('batch-view'), batchViewMessage: document.getElementById('batch-view-message'),
+        globalStatus: document.getElementById('global-status'), globalProgress: document.getElementById('global-progress'),
+        globalProgressBar: document.getElementById('global-progress').querySelector('.progress-bar-inner'),
+        processAllBtn: document.getElementById('processAllBtn'), 
+		audioPlayerModal: document.getElementById('audioPlayerModal'),
+		playerModalTitle: document.getElementById('playerModalTitle'),
+		playerPlayPauseBtn: document.getElementById('playerPlayPauseBtn'),
+		playerProgressBar: document.getElementById('playerProgressBar'),
+		playerCurrentTime: document.getElementById('playerCurrentTime'),
+		playerTotalDuration: document.getElementById('playerTotalDuration'),
+		playerModalCloseBtn: document.getElementById('playerModalCloseBtn'),
+        downloadSpliceBtn: document.getElementById('downloadSpliceBtn'), 
+        timbreUploadModal: document.getElementById('timbreUploadModal'), newTimbreNameInput: document.getElementById('newTimbreName'),
+        newTimbreTextInput: document.getElementById('newTimbreText'), cancelUploadBtn: document.getElementById('cancelUploadBtn'),
+		transcribeBtn: document.getElementById('transcribeBtn'),
+        previewUploadBtn: document.getElementById('previewUploadBtn'),
+        confirmUploadBtn: document.getElementById('confirmUploadBtn'), profileModal: document.getElementById('profileModal'),
+        profileModalTitle: document.getElementById('profileModalTitle'), profileModalBody: document.getElementById('profileModalBody'),
+        profileModalCloseBtn: document.getElementById('profileModalCloseBtn'),
+        settingsBtn: document.getElementById('settingsBtn'),
+        exportFormat: document.getElementById('exportFormat'),
+        exportQuality: document.getElementById('exportQuality'),
+		saveChapterBtn: document.getElementById('saveChapterBtn'),
+		addRowStartBtn: document.getElementById('addRowStartBtn'),
+		filterBtn: document.getElementById('filterBtn'),
+		filterModal: document.getElementById('filterModal'),
+		applyFilterBtn: document.getElementById('applyFilterBtn'),
+		clearFilterBtn: document.getElementById('clearFilterBtn'),
+		rangeStartInput: document.getElementById('rangeStart'),
+		rangeEndInput: document.getElementById('rangeEnd'),
+        dialogueModal: document.getElementById('dialogueModal'),
+        dialogueModalTitle: document.getElementById('dialogueModalTitle'),
+        dialogueModalBody: document.getElementById('dialogueModalBody'),
+        dialogueModalCloseBtn: document.getElementById('dialogueModalCloseBtn'),
+        choralModal: document.getElementById('choralModal'),
+        choralModalTitle: document.getElementById('choralModalTitle'),
+        choralTimbreList: document.getElementById('choralTimbreList'),
+        cancelChoralBtn: document.getElementById('cancelChoralBtn'),
+        confirmChoralBtn: document.getElementById('confirmChoralBtn'),
+        llmModelSelector: document.getElementById('llmModelSelector'),
+        globalSettingsModal: document.getElementById('globalSettingsModal'),
+        globalSettingsCloseBtn: document.getElementById('globalSettingsCloseBtn'),
+        globalSettingsSaveBtn: document.getElementById('globalSettingsSaveBtn'),
+        llmSettingsForm: document.getElementById('llmSettingsForm'),
+		ttsSettingsForm: document.getElementById('ttsSettingsForm'),
+        exportFormat: document.getElementById('exportFormat'),
+        exportQuality: document.getElementById('exportQuality'),
+        deleteNovelBtn: document.getElementById('deleteNovelBtn'),
+        deleteNovelModal: document.getElementById('deleteNovelModal'),
+        novelToDeleteName: document.getElementById('novelToDeleteName'),
+        deleteConfirmInput: document.getElementById('deleteConfirmInput'),
+        cancelDeleteBtn: document.getElementById('cancelDeleteBtn'),
+        confirmDeleteBtn: document.getElementById('confirmDeleteBtn'),
+        uploadTxtLabelBtn: document.getElementById('uploadTxtLabelBtn'),
+        manageCharactersBtn: document.getElementById('manageCharactersBtn'),
+        charManageModal: document.getElementById('charManageModal'),
+        charSearchInput: document.getElementById('charSearchInput'),
+        charManageList: document.getElementById('charManageList'),
+        charsToMerge: document.getElementById('charsToMerge'),
+        targetCharSelect: document.getElementById('targetCharSelect'),
+        confirmMergeBtn: document.getElementById('confirmMergeBtn'),
+        closeCharManageBtn: document.getElementById('closeCharManageBtn'),
+		settingsDefaultModel: document.getElementById('settingsDefaultModel'),
+		settingsProxyEnabled: document.getElementById('settingsProxyEnabled'),
+		proxyDetailsGroup: document.getElementById('proxy-details-group'),
+		settingsProxyProtocol: document.getElementById('settingsProxyProtocol'),
+		settingsProxyAddress: document.getElementById('settingsProxyAddress'),
+		settingsProxyPort: document.getElementById('settingsProxyPort'),
+		settingsDefaultTtsModel: document.getElementById('settingsDefaultTtsModel'),
+		editorTitleText: document.getElementById('editor-title-text'),
+		chapterPlayStopBtn: document.getElementById('chapterPlayStopBtn'),
+		manageTimbresBtn: document.getElementById('manageTimbresBtn'),
+		timbresManageModal: document.getElementById('timbresManageModal'),
+		closeTimbresManageBtn: document.getElementById('closeTimbresManageBtn'),
+		managerCategoryList: document.getElementById('manager-category-list'),
+		managerNewCategoryInput: document.getElementById('managerNewCategoryInput'),
+		managerAddCategoryBtn: document.getElementById('managerAddCategoryBtn'),
+		managerTimbresTitle: document.getElementById('manager-timbres-title'),
+		managerTimbresList: document.getElementById('manager-timbres-list'),
+		uploadTimbreCategory: document.getElementById('uploadTimbreCategory'),
+        // Replace Dictionary Modal DOM elements
+        manageReplaceDictBtn: document.getElementById('manageReplaceDictBtn'),
+        replaceDictModal: document.getElementById('replaceDictModal'),
+        replaceDictNovelName: document.getElementById('replaceDictNovelName'),
+        newOriginalWord: document.getElementById('newOriginalWord'),
+        newReplacementWord: document.getElementById('newReplacementWord'),
+        newDescription: document.getElementById('newDescription'),
+        addReplaceRuleBtn: document.getElementById('addReplaceRuleBtn'),
+        replaceRuleSearchInput: document.getElementById('replaceRuleSearchInput'),
+        replaceRulesList: document.getElementById('replaceRulesList'),
+        closeReplaceDictBtn: document.getElementById('closeReplaceDictBtn')
+    };
+
+    // === 3. HELPER FUNCTIONS ===
+    function playAudio(audioPath) {
+        stopAllAudio(); // 播放前确保停止所有其他音频
+
+        // 注意：我们仍然使用 state.simpleAudioPlayer 来播放，
+        // 这样 stopAllAudio 也能正确地停止它。
+        state.simpleAudioPlayer = new Audio(`${audioPath}?t=${new Date().getTime()}`);
+        
+        const audio = state.simpleAudioPlayer;
+
+        // 绑定必要的事件，以便在播放结束或出错时清理自身
+        const onEnded = () => {
+            // 播放完后，只清理播放器实例，不碰任何UI按钮
+            if (state.simpleAudioPlayer === audio) {
+                state.simpleAudioPlayer = null;
+            }
+        };
+        const onError = () => { setStatus(`播放失败`, 'error'); onEnded(); };
+        
+        audio.addEventListener('ended', onEnded);
+        audio.addEventListener('error', onError);
+
+        audio.play().catch(e => {
+            if (e.name !== 'AbortError') setStatus(`播放失败: ${e.message}`, 'error');
+            onEnded();
+        });
+    }
+	function formatTime(seconds) {
+		const minutes = Math.floor(seconds / 60);
+		const secs = Math.floor(seconds % 60);
+		return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+	}
+    // --- 新增：防止屏幕休眠的辅助函数 ---
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                // 如果已存在一个锁，先释放它
+                await releaseWakeLock();
+                state.screenWakeLock = await navigator.wakeLock.request('screen');
+                console.log('屏幕唤醒锁已激活。');
+                setStatus('长时间任务进行中，屏幕将保持唤醒...', 'info');
+
+                // 监听锁的释放事件，以防浏览器自动释放（例如切换标签页）
+                state.screenWakeLock.addEventListener('release', () => {
+                    console.log('屏幕唤醒锁已被浏览器释放。');
+                    state.screenWakeLock = null;
+                });
+            } catch (err) {
+                console.error(`${err.name}, ${err.message}`);
+                // 忽略错误，因为这不是核心功能
+            }
+        } else {
+            console.warn('浏览器不支持 Screen Wake Lock API。');
+        }
+    }
+
+    async function releaseWakeLock() {
+        if (state.screenWakeLock !== null) {
+            try {
+                await state.screenWakeLock.release();
+                state.screenWakeLock = null;
+                console.log('屏幕唤醒锁已释放。');
+            } catch (err) {
+                console.error(`${err.name}, ${err.message}`);
+            }
+        }
+    }
+	
+	function sanitizeTitleForFilename(title) {
+		// This regex replaces any character that is NOT a letter, number, space, underscore, or hyphen.
+		// We specifically keep Chinese characters by including the Unicode range \u4e00-\u9fa5.
+		// The logic should perfectly match the Python backend's safe_title generation.
+		// Python: "".join(c for c in title if c.isalnum() or c in " _-").rstrip()
+		// JS equivalent is a bit more complex with regex to cover different languages.
+		// A simpler regex that removes most problematic characters is often sufficient.
+		
+		// This simplified version removes common illegal characters for filenames.
+		// It keeps letters (including Chinese), numbers, spaces, underscores, and hyphens.
+		// It removes characters like （, ）, 、, ?, etc.
+		return title.replace(/[^\p{L}\p{N}\s_-]/gu, '').trim();
+	}
+	function markChapterAsDirty() {
+		dom.saveChapterBtn.disabled = false;
+		setStatus('内容已修改，请记得保存。', 'warning');
+	}
+    function setStatus(msg, type = 'info') {
+        dom.globalStatus.textContent = msg;
+        const colorMap = { 'info': '#5f6368', 'success': '#1e8e3e', 'error': '#d93025', 'warning': '#f9ab00' };
+        dom.globalStatus.style.color = colorMap[type];
+    }
+    async function fetchFromServer(url, options = {}) {
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(errorData.detail || `请求失败: ${response.status}`);
+        }
+        return response.json();
+    }
+		
+	function stopAllAudio(fromSimplePlayerClick = false) {
+		// 停止章节播放器
+		if (state.globalAudioPlayer) {
+			const audio = state.globalAudioPlayer;
+			audio.pause();
+			if (audio._listeners) {
+				audio.removeEventListener('loadedmetadata', audio._listeners.onLoadedMetadata);
+				audio.removeEventListener('timeupdate', audio._listeners.onTimeUpdate);
+				audio.removeEventListener('play', audio._listeners.onPlay);
+				audio.removeEventListener('pause', audio._listeners.onPause);
+				audio.removeEventListener('ended', audio._listeners.onEnded);
+				audio.removeEventListener('error', audio._listeners.onError);
+			}
+			state.globalAudioPlayer = null;
+			dom.chapterPlayStopBtn.textContent = '▶️ 播放章节';
+			dom.audioPlayerModal.style.display = 'none';
+		}
+
+		// 停止简单播放器
+		if (state.simpleAudioPlayer) {
+            // 检查 URL 是否为 blob URL，如果是，则释放它以避免内存泄漏
+            if (state.simpleAudioPlayer.src && state.simpleAudioPlayer.src.startsWith('blob:')) {
+                URL.revokeObjectURL(state.simpleAudioPlayer.src);
+            }
+			state.simpleAudioPlayer.pause();
+			if (state.simpleAudioPlayer._listeners) {
+				 state.simpleAudioPlayer.removeEventListener('ended', state.simpleAudioPlayer._listeners.onEnded);
+				 state.simpleAudioPlayer.removeEventListener('error', state.simpleAudioPlayer._listeners.onError);
+			}
+			state.simpleAudioPlayer = null;
+		}
+
+		// 重置简单播放按钮的图标
+		if (state.activeSimplePlayerButton) {
+			state.activeSimplePlayerButton.innerHTML = '▶';
+			state.activeSimplePlayerButton = null;
+		}
+	}
+	
+    function toggleLocalBlobAudio(button, file) {
+        // 这个函数专门用于处理本地文件预览的播放
+
+        // 步骤 1: 如果当前正在播放的就是这个按钮，则停止它
+        if (state.activeSimplePlayerButton === button) {
+            stopAllAudio(); // stopAllAudio 会处理图标重置和音频停止
+            return;
+        }
+
+        // 步骤 2: 停止所有其他可能正在播放的音频
+        stopAllAudio();
+
+        // 步骤 3: 为本地文件创建一个新的 blob URL
+        const localAudioURL = URL.createObjectURL(file);
+
+        // 步骤 4: 更新状态并开始播放
+        state.activeSimplePlayerButton = button;
+        button.innerHTML = '⏹';
+
+        state.simpleAudioPlayer = new Audio(localAudioURL); // 直接使用，不加时间戳
+        const audio = state.simpleAudioPlayer;
+        
+        const onEnded = () => {
+            URL.revokeObjectURL(localAudioURL); // 在播放结束后释放 URL
+            stopAllAudio();
+        };
+        const onError = () => {
+            setStatus(`播放失败`, 'error');
+            URL.revokeObjectURL(localAudioURL); // 出错时也要释放 URL
+            stopAllAudio();
+        };
+        
+        audio.addEventListener('ended', onEnded);
+        audio.addEventListener('error', onError);
+        audio._listeners = { onEnded, onError }; // 记录下来以便 stopAllAudio 能移除
+
+        audio.play().catch(e => {
+            if (e.name !== 'AbortError') setStatus(`播放失败: ${e.message}`, 'error');
+            URL.revokeObjectURL(localAudioURL); // 出错时也要释放 URL
+            stopAllAudio();
+        });
+    }
+
+	/**
+	 * 新功能 1: 播放/停止 章节音频 (由内容编辑器标题栏按钮触发)
+	 */
+	function toggleChapterAudio() {
+		if (state.globalAudioPlayer) {
+			stopAllAudio();
+			return;
+		}
+
+		const selectedCheckboxes = dom.chapterListEl.querySelectorAll('.chapter-checkbox:checked');
+		if (selectedCheckboxes.length === 1) {
+			const checkbox = selectedCheckboxes[0];
+			const chapterTitle = checkbox.dataset.title;
+			const pathParts = checkbox.value.replace('.json', '').split(/[/\\]/);
+			const novel = pathParts[0];
+			const chapter = pathParts.length > 1 ? pathParts[1] : pathParts[0];
+			const audioFormat = state.globalConfig.audio_export?.format || 'mp3';
+			const audioPath = `/output/${novel}/${chapter}.${audioFormat}`;
+			
+			stopAllAudio();
+			state.globalAudioPlayer = new Audio(`${audioPath}?t=${new Date().getTime()}`);
+			const audio = state.globalAudioPlayer;
+
+			dom.playerModalTitle.textContent = `正在播放: ${chapterTitle}`;
+			dom.audioPlayerModal.style.display = 'flex';
+			dom.chapterPlayStopBtn.textContent = '⏹ 停止播放';
+
+			// --- 完整的事件处理器定义 ---
+			const onLoadedMetadata = () => {
+				dom.playerProgressBar.max = audio.duration;
+				dom.playerTotalDuration.textContent = formatTime(audio.duration);
+			};
+			const onTimeUpdate = () => {
+				dom.playerProgressBar.value = audio.currentTime;
+				dom.playerCurrentTime.textContent = formatTime(audio.currentTime);
+			};
+			const onPlay = () => dom.playerPlayPauseBtn.innerHTML = '⏸️';
+			const onPause = () => dom.playerPlayPauseBtn.innerHTML = '▶️';
+			const onEnded = stopAllAudio;
+			const onError = () => { setStatus(`无法加载音频`, 'error'); stopAllAudio(); };
+
+			audio.addEventListener('loadedmetadata', onLoadedMetadata);
+			audio.addEventListener('timeupdate', onTimeUpdate);
+			audio.addEventListener('play', onPlay);
+			audio.addEventListener('pause', onPause);
+			audio.addEventListener('ended', onEnded);
+			audio.addEventListener('error', onError);
+			audio._listeners = { onLoadedMetadata, onTimeUpdate, onPlay, onPause, onEnded, onError };
+			
+			audio.play().catch(e => {
+				if (e.name !== 'AbortError') setStatus(`播放失败: ${e.message}`, 'error');
+				stopAllAudio();
+			});
+		}
+	}
+
+	/**
+	 * 新功能 2: 播放/停止 简单音频 (由圆形按钮触发)
+	 */
+	function toggleSimpleAudio(button, audioPath) {
+        // 在开始播放新音频前，检查并释放上一个 blob URL
+        if (state.currentBlobURL) {
+            URL.revokeObjectURL(state.currentBlobURL);
+            state.currentBlobURL = null;
+        }
+		const isCurrentlyPlaying = state.activeSimplePlayerButton === button;
+
+		// 1. 无论如何，先停止所有当前正在播放的音频。
+		//    stopAllAudio() 会负责将旧的 activeSimplePlayerButton 的图标恢复为 ▶
+		stopAllAudio();
+
+		// 2. 如果刚才点击的按钮就是正在播放的那个，那么我们的任务只是停止它，所以到此为止。
+		if (isCurrentlyPlaying) {
+			return;
+		}
+
+		// 3. 否则，我们要开始播放新的音频。
+		state.activeSimplePlayerButton = button;
+		button.innerHTML = '⏹';
+
+        // 如果是 blob URL，则记录下来以便后续释放
+        if (audioPath.startsWith('blob:')) {
+            state.currentBlobURL = audioPath;
+        }
+		state.simpleAudioPlayer = new Audio(`${audioPath}?t=${new Date().getTime()}`);
+		const audio = state.simpleAudioPlayer;
+		
+		const onEnded = () => {
+			// 播放完后，调用 stopAllAudio 来清理一切并重置UI
+			stopAllAudio();
+		};
+		const onError = () => { setStatus(`播放失败`, 'error'); stopAllAudio(); };
+		
+		audio.addEventListener('ended', onEnded);
+		audio.addEventListener('error', onError);
+		audio._listeners = { onEnded, onError };
+
+		audio.play().catch(e => {
+			if (e.name !== 'AbortError') setStatus(`播放失败: ${e.message}`, 'error');
+			stopAllAudio(); // 出错时也要清理
+		});
+	}
+	
+    function toBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+    async function checkFileExists(filePath) {
+		try {
+			const response = await fetch(filePath, { method: 'HEAD', cache: 'no-store' });
+			return response.ok;
+		} catch (error) { return false; }
+	}
+
+    // === 4. CORE LOGIC & RENDERING ===
+
+    async function loadNovels(shouldRender = true) { // 增加一个 shouldRender 参数
+        try {
+            const data = await fetchFromServer('/api/list_novels');
+            state.allNovelsData = data.novels_details || {};
+
+            if (shouldRender) { // 只有在需要时才重绘下拉框
+                const currentNovel = dom.novelSelector.value; // 保存当前选中的值
+
+                dom.novelSelector.innerHTML = '<option value="">-- 选择小说项目 --</option>';
+                Object.keys(state.allNovelsData).sort().forEach(novel => {
+                    const option = document.createElement('option');
+                    option.value = novel; option.textContent = novel;
+                    dom.novelSelector.appendChild(option);
+                });
+
+                // 尝试恢复之前的选中状态
+                if (currentNovel && state.allNovelsData[currentNovel]) {
+                    dom.novelSelector.value = currentNovel;
+                }
+            }
+        } catch (e) { 
+            setStatus(`加载小说列表失败: ${e.message}`, 'error'); 
+        }
+    }
+	
+    async function handleTxtFileUpload(file) {
+        if (!file) return;
+        
+        const novelName = file.name.replace(/\.txt$/i, '');
+        setStatus(`正在上传并分析小说: ${file.name}...`, 'info');
+        
+        // 禁用UI防止用户操作
+        dom.novelSelector.disabled = true;
+        dom.uploadTxtLabelBtn.disabled = true;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            // 1. 上传文件，并直接从后端获取新项目的完整数据结构
+            const newProjectData = await fetchFromServer('/api/upload_txt_novel', { 
+                method: 'POST', 
+                body: formData 
+            });
+            setStatus(newProjectData.message, 'success');
+
+            // 2. 更新前端 state
+            //    a. 增量更新 allNovelsData，加入这个新项目
+            //       后端应该在 upload_txt_novel 成功后，返回类似 list_novels 中单个项目的结构
+            //       为了确保万无一失，我们直接重新加载所有小说
+            await loadNovels();
+
+            // 3. 更新UI
+            //    a. 重新填充下拉框（loadNovels 已经做了）
+            //    b. 以编程方式选中新上传的小说
+            state.isProgrammaticChange = true; // 立起旗帜，防止 change 事件的副作用
+            dom.novelSelector.value = novelName;
+            
+            // c. 【核心修复】手动调用 handleNovelSelection 来加载新项目的内容
+            //    因为 isProgrammaticChange 标志会阻止 change 事件监听器中的 handleNovelSelection 执行
+            await handleNovelSelection(true); // 传入一个参数表示这是由上传触发的
+
+        } catch (error) {
+            setStatus(`上传失败: ${error.message}`, 'error');
+        } finally {
+            // 4. 无论成功失败，都恢复UI
+            dom.novelSelector.disabled = false;
+            dom.uploadTxtLabelBtn.disabled = false;
+        }
+    }
+
+	// 差异点：提供完整的、包含过滤逻辑的 renderChapterList 函数
+	async function renderChapterList() {
+		const listContainer = dom.chapterListEl;
+		listContainer.innerHTML = '';
+		state.lastCheckedIndex = -1;
+		
+        const novelName = state.novelName;
+        const novelData = state.allNovelsData[novelName];
+        
+        // --- 诊断探针 1 ---
+        console.log(`[renderChapterList] Rendering for novel: ${novelName}`);
+        if (novelData) {
+            console.log(`[renderChapterList] Found novelData. isTxtProject is:`, novelData.isTxtProject);
+        } else {
+            console.warn(`[renderChapterList] No novelData found for ${novelName}!`);
+        }
+		
+        const isTxtProject = novelData && novelData.isTxtProject === true;
+		
+		let originalChapters = [];
+
+		if (novelData && novelData.chapters) {
+            originalChapters = novelData.chapters.map((c, index) => ({ 
+				path: isTxtProject ? c.id : `${novelName}/${sanitizeTitleForFilename(c.title)}.json`,
+				name: c.title,
+				originalIndex: index,
+				processed: c.processed,
+                spliced: c.spliced
+			}));
+		}
+
+		const { status, start, end } = state.filter;
+		let isFilterActive = status !== 'all' || (start && start.trim()) || (end && end.trim());
+		let chaptersToRender = originalChapters;
+		if (isFilterActive) {
+			chaptersToRender = originalChapters.filter((chapter, index) => {
+				const itemIndex = index + 1;
+				if (status === 'processed' && !chapter.processed) return false;
+				if (status === 'unprocessed' && chapter.processed) return false;
+				const startRange = start ? parseInt(start, 10) : null;
+				const endRange = end ? parseInt(end, 10) : null;
+				if (startRange && itemIndex < startRange) return false;
+				if (endRange && itemIndex > endRange) return false;
+				return true;
+			});
+		}
+		dom.filterBtn.classList.toggle('filter-btn-active', isFilterActive);
+
+		if (chaptersToRender.length === 0) {
+			dom.chapterListEl.innerHTML = '<p class="placeholder-text">没有找到匹配的章节</p>';
+		} else {
+            let displayCounter = 1;
+			chaptersToRender.forEach(chapter => {
+				const li = document.createElement('li');
+				li.className = `selectable ${chapter.processed ? 'processed' : ''} ${chapter.spliced ? 'spliced' : ''}`;
+				
+				const txtChapterAttribute = isTxtProject ? 'data-txt-chapter="true"' : '';
+                
+                // *** 核心修改：在这里修正 checkbox value 的生成逻辑 ***
+                let checkboxValue;
+                if (chapter.processed) {
+                    // 如果章节已处理，无论它来自哪里，它的 "身份" 都应该是一个 .json 文件。
+                    // 它的路径应该是标准格式。
+                    checkboxValue = `${novelName}/${sanitizeTitleForFilename(chapter.name)}.json`;
+                } else {
+                    // 如果章节未处理，才区分它来自哪里。
+                    // 如果是 TXT 项目，它的路径就是它的 ID。
+                    // 如果是原生项目，我们也可以预先生成路径，但这不关键。
+                    checkboxValue = isTxtProject ? chapter.path : `${novelName}/${sanitizeTitleForFilename(chapter.name)}.json`;
+                }
+                
+                // 为了与 "处理选中章节" 按钮兼容，未处理的TXT章节需要保留 data-txt-chapter 属性
+                // 只有当它是未处理的TXT项目时，才添加这个属性
+                const finalTxtAttribute = isTxtProject ? 'data-txt-chapter="true"' : '';
+
+				li.innerHTML = `<label style="display:flex; align-items:center; width:100%; cursor:pointer;">
+                                    <input type="checkbox" class="chapter-checkbox" value="${checkboxValue}" data-index="${chapter.originalIndex}" data-title="${chapter.name}" ${txtChapterAttribute}> 
+                                    <span class="label">
+                                        <span style="display: inline-block; width: 3em; color: #9aa0a6; text-align: right; margin-right: 0.5rem;">${displayCounter}.</span>
+                                        ${chapter.name}
+                                    </span>
+                                </label>`;
+				
+				listContainer.appendChild(li);
+                displayCounter++; // 计数器递增
+			});
+		}
+		updateGlobalButtons();
+	}
+        
+    async function processTxtChapters() {
+        if (state.isTxtProcessing) {
+            state.isTxtProcessingCancelled = true;
+            setStatus('中止指令已发出，正在等待当前章节处理完成...', 'warning');
+            updateGlobalButtons();
+            return;
+        }
+
+        const chapterCheckboxesToProcess = Array.from(dom.chapterListEl.querySelectorAll('.chapter-checkbox[data-txt-chapter]:checked'));
+        if (chapterCheckboxesToProcess.length === 0) {
+            alert('请至少选择一个TXT项目的章节进行处理。');
+            return;
+        }
+		
+        if (!state.selectedLLM) {
+            alert('错误：未能获取到有效的处理模型。请确认模型已选择或刷新页面重试。');
+            setStatus('处理失败：未选择处理模型。', 'error');
+            return;
+        }
+
+        // --- 新增：用户确认逻辑 ---
+        const chaptersToReprocess = chapterCheckboxesToProcess
+            .filter(cb => cb.closest('li').classList.contains('processed'))
+            .map(cb => cb.dataset.title);
+
+        if (chaptersToReprocess.length > 0) {
+            let confirmationMessage = '';
+            const reprocessCount = chaptersToReprocess.length;
+            const displayThreshold = 5;
+
+            if (reprocessCount <= displayThreshold) {
+                confirmationMessage = `以下章节将被重新处理，并删除已生成的语音：\n\n- ${chaptersToReprocess.join('\n- ')}\n\n您确定要继续吗？`;
+            } else {
+                confirmationMessage = `您选中了 ${reprocessCount} 个已被处理过的章节。\n\n继续操作将永久删除这些章节已生成的所有语音文件。\n\n您确定要继续吗？`;
+            }
+
+            if (!confirm(confirmationMessage)) {
+                setStatus('操作已取消。', 'info');
+                return; // 用户取消，终止函数
+            }
+        }
+        // --- 用户确认逻辑结束 ---
+        
+        state.isTxtProcessing = true;
+        state.isTxtProcessingCancelled = false;
+        updateGlobalButtons();
+
+        let processedCount = 0;
+        const totalToProcess = chapterCheckboxesToProcess.length;
+        
+        try {
+			await requestWakeLock(); // <-- 新增
+            for (let i = 0; i < totalToProcess; i++) {
+                if (state.isTxtProcessingCancelled) {
+                    setStatus('处理已中止。', 'warning');
+                    break;
+                }
+
+                const checkbox = chapterCheckboxesToProcess[i];
+                const chapterTitle = checkbox.dataset.title;
+                const isReprocessing = chaptersToReprocess.includes(chapterTitle);
+
+                setStatus(`[${i + 1}/${totalToProcess}] ${isReprocessing ? '重新' : ''}处理章节: ${chapterTitle}...`, 'info');
+
+                try {
+                    const payload = { 
+                        novel_name: state.novelName, 
+                        chapter_title: chapterTitle,
+                        model_name: state.selectedLLM,
+                        force_regenerate: isReprocessing // 向后端发送信号
+                    };
+                    
+                    await fetchFromServer('/api/process_single_chapter', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    processedCount++;
+
+                } catch (error) {
+                    setStatus(`处理章节 "${chapterTitle}" 失败: ${error.message}。已跳过。`, 'error');
+                    console.error(`[Process TXT] Error processing ${chapterTitle}:`, error);
+                    continue;
+                }
+            }
+        } finally {
+			await releaseWakeLock(); // <-- 新增
+            setStatus(`处理任务结束。共成功处理 ${processedCount} / ${totalToProcess} 个章节。`, 'success');
+            
+            state.isTxtProcessing = false;
+            state.isTxtProcessingCancelled = false;
+
+            // 刷新章节列表和UI
+            await loadNovels(); // 使用完整的 loadNovels 来获取最新状态
+            const currentSelectedTitles = chapterCheckboxesToProcess.map(cb => cb.dataset.title);
+            dom.novelSelector.value = state.novelName; // 确保下拉框选中当前小说
+            await renderChapterList();
+            
+            // 恢复勾选状态
+            dom.chapterListEl.querySelectorAll('.chapter-checkbox').forEach(cb => {
+                if (currentSelectedTitles.includes(cb.dataset.title)) {
+                    cb.checked = true;
+                }
+            });
+
+            updateGlobalButtons();
+            handleChapterSelectionChange();
+        }
+    }
+
+    async function loadCharacters() {
+        const chapterPaths = Array.from(dom.chapterListEl.querySelectorAll('.chapter-checkbox:checked')).map(cb => cb.value);
+        if (chapterPaths.length === 0) {
+            dom.characterListEl.innerHTML = '<p class="placeholder-text">请在左侧选择章节</p>';
+            return;
+        }
+        dom.characterListEl.innerHTML = '<p class="placeholder-text">正在加载角色...</p>';
+        try {
+            const chapterFiles = chapterPaths.map(path => path.split('/').pop());
+            const payload = { novel_name: state.novelName, chapter_files: chapterFiles };
+            const data = await fetchFromServer('/api/get_characters_in_chapters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            renderCharacterList(data.characters);
+        } catch (e) {
+            setStatus(`加载角色失败: ${e.message}`, 'error');
+            dom.characterListEl.innerHTML = `<p class="placeholder-text" style="color:var(--danger-color);">加载角色失败</p>`;
+        }
+    }
+
+	async function renderCharacterList(characters) {
+        dom.characterListEl.innerHTML = '';
+        if (!characters || characters.length === 0) {
+             dom.characterListEl.innerHTML = '<p class="placeholder-text">所选章节内未发现角色</p>'; return;
+        }
+		
+		// --- 异步获取所有角色的简介，以便判断是否完整 ---
+		const profilesResponse = await fetch(`/api/get_novel_details?novel_name=${state.novelName}`);
+		const novelDetails = await profilesResponse.json();
+		const characterProfiles = novelDetails.profiles || {};
+
+        // *** 核心修改：使用更简单、更可靠的排序逻辑 ***
+        characters.sort((a, b) => {
+            // 直接检查 state.characterMapping[角色名] 是否为一个“真值”
+            // 真值意味着它不是 null, undefined, '', 0, false。
+            // 这覆盖了所有“未分配”或“被清空”的情况。
+            const a_has_timbre = !!state.characterMapping[a];
+            const b_has_timbre = !!state.characterMapping[b];
+
+            // 如果两者的分配状态不同
+            if (a_has_timbre !== b_has_timbre) {
+                // 如果 a 没有音色 (false)，b 有 (true)，那么 a 应该排在前面。
+                // !a_has_timbre (true) - !b_has_timbre (false) = 1 (在JS中布尔值会转为数字)
+                // 这不是我们想要的。直接用 if 判断更清晰。
+                if (a_has_timbre) {
+                    return 1; // a 有，b 没有，b 在前
+                } else {
+                    return -1; // a 没有，b 有，a 在前
+                }
+            }
+            
+            // 如果两者状态相同（都有或都没有），则按字母顺序排序
+            return a.localeCompare(b);
+        });
+        
+        // --- 后续的渲染逻辑保持不变 ---
+
+        const timbreUsageCount = {};
+        characters.forEach(char => {
+            const timbre = state.characterMapping[char];
+            if (timbre) timbreUsageCount[timbre] = (timbreUsageCount[timbre] || 0) + 1;
+        });
+        const sharedTimbres = Object.keys(timbreUsageCount).filter(timbre => timbreUsageCount[timbre] > 1);
+        const timbreToColorMap = {};
+        sharedTimbres.forEach((timbre, index) => { timbreToColorMap[timbre] = timbreColorClasses[index % timbreColorClasses.length]; });
+
+        characters.forEach(char => {
+            const li = document.createElement('li');
+            li.className = 'selectable character-row';
+            li.dataset.characterName = char;
+            if (char === state.selectedCharacter) li.classList.add('selected');
+            
+            const currentTimbre = state.characterMapping[char] || '---';
+            if (currentTimbre === '---') {
+                li.style.borderLeft = '3px solid var(--danger-color)'; // 用左边框高亮未分配项
+            }
+            
+            if (timbreToColorMap[currentTimbre]) li.classList.add(timbreToColorMap[currentTimbre]);
+			
+			let deepAnalyzeBtnHtml = '';
+			const profile = characterProfiles[char];
+			if (char !== '旁白' && profile && (profile.gender === '未知' || profile.ageGroup === '未知')) {
+				deepAnalyzeBtnHtml = `<button class="btn-deep-analyze" data-character-name="${char}" title="深度分析并补全信息">🔍</button>`;
+			}
+			
+			const isNarrator = char === '旁白'; // 定义一个变量，方便复用
+			const profileBtnDisabled = isNarrator ? 'disabled' : ''; // 如果是旁白，则添加 disabled 属性
+            const isPlayable = !!state.characterMapping[char];
+            const playableClass = isPlayable ? 'playable' : '';
+			li.innerHTML = `<button class="btn btn-profile" data-character-name="${char}" title="${isNarrator ? '旁白无需简介' : `查看'${char}'简介`}" ${profileBtnDisabled}>i</button>
+						  ${deepAnalyzeBtnHtml}
+						  <span class="label">${char}</span>
+						  <div class="character-actions">
+							<span class="value">${currentTimbre}</span>
+							<button class="audio-player-btn ${playableClass}" title="试听音色 ${currentTimbre}" style="visibility: ${state.characterMapping[char] ? 'visible' : 'hidden'};">▶</button>
+						  </div>`;
+            dom.characterListEl.appendChild(li);
+        });
+        updateRelatedRolesPopovers(); // 在这里调用，确保 DOM 已更新
+    }
+    
+	function updateRelatedRolesPopovers() {
+		const isAnyChapterSelected = state.selectedChapterPaths.length > 0;
+
+		let activeChapterCharacters = new Set();
+		if (isAnyChapterSelected) {
+			dom.characterListEl.querySelectorAll('.character-row .label').forEach(labelEl => {
+				activeChapterCharacters.add(labelEl.textContent);
+			});
+		}
+		const activeChapterCharacterArray = Array.from(activeChapterCharacters);
+
+		dom.timbreListEl.querySelectorAll('li').forEach(li => {
+			const timbreName = li.querySelector('.label')?.textContent;
+			if (!timbreName) return;
+
+			const popoverContainer = li.querySelector('.popover-container.roles-popover');
+			if (!popoverContainer) return;
+
+			const allAssignedRoles = Object.entries(state.characterMapping)
+								  .filter(([char, timb]) => timb === timbreName)
+								  .map(([char]) => char);
+            
+            const relevantAssignedRoles = allAssignedRoles.filter(role => 
+                activeChapterCharacterArray.includes(role)
+            );
+
+			const popoverContentUl = popoverContainer.querySelector('.popover-content ul');
+            
+            if (isAnyChapterSelected && relevantAssignedRoles.length > 0) {
+                popoverContainer.style.display = 'block';
+				popoverContentUl.innerHTML = relevantAssignedRoles.map(c => `<li>${c}</li>`).join('');
+            } else {
+                popoverContainer.style.display = 'none';
+                popoverContentUl.innerHTML = '';
+            }
+		});
+	}
+    
+	async function loadAndApplyConfig() {
+		dom.saveConfigBtn.disabled = true;
+		setStatus(`正在为 "${state.novelName}" 加载音色配置...`);
+		try {
+            // *** 核心修改：在URL中添加一个缓存破坏者参数 ***
+            const cacheBuster = `&_t=${new Date().getTime()}`;
+			const url = `/api/get_config?novel_name=${state.novelName}${cacheBuster}`;
+
+			// 使用新的URL来获取数据
+			state.characterMapping = await fetchFromServer(url);
+			setStatus(`配置加载成功`, 'success');
+		} catch(e) {
+			state.characterMapping = {};
+			setStatus(`未找到小说 "${state.novelName}" 的配置，已使用空配置。`, 'warning');
+		} finally {
+			await loadCharacters();
+			dom.saveConfigBtn.disabled = !state.novelName;
+		}
+	}
+    
+	async function saveConfig() {
+		if (!state.novelName) return;
+		setStatus(`正在保存配置到 "${state.novelName}.json"...`);
+		try {
+			// The novel_name is now the sole identifier for the config
+			const payload = { novel_name: state.novelName, config_data: state.characterMapping };
+			const result = await fetchFromServer('/api/update_config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+			setStatus(result.message, 'success');
+            updateRelatedRolesPopovers(); 
+		} catch (e) { setStatus(`保存配置失败: ${e.message}`, 'error'); }
+	}
+
+    function showTimbreUploadModal(file) {
+        state.fileToUpload = file;
+        dom.newTimbreNameInput.value = file.name.split('.').slice(0, -1).join('.');
+        dom.newTimbreTextInput.value = '';
+        dom.timbreUploadModal.style.display = 'flex';
+        dom.newTimbreNameInput.focus();
+		dom.transcribeBtn.disabled = !file;
+        dom.previewUploadBtn.disabled = !file; // 根据文件是否存在来启用/禁用按钮
+    }
+    function hideTimbreUploadModal() {
+        stopAllAudio(); // 确保在关闭时停止任何正在播放的音频
+        dom.timbreUploadModal.style.display = 'none';
+        state.fileToUpload = null;
+        dom.previewUploadBtn.disabled = true; // 关闭后禁用按钮
+    }
+	async function handleTimbreUpload() {
+		if (!state.fileToUpload) return;
+		const timbreName = dom.newTimbreNameInput.value.trim();
+		const promptText = dom.newTimbreTextInput.value.trim();
+		if (!timbreName || !promptText) {
+			alert('音色名称和参考文本均不能为空。');
+			return;
+		}
+		const normalize = document.getElementById('normalizeVolume').checked;
+		const category = dom_timbres_manager.uploadCategorySelect.value; // 获取分类
+		
+		const formData = new FormData();
+		formData.append('file', state.fileToUpload);
+		formData.append('timbre_name', timbreName);
+		formData.append('prompt_text', promptText);
+		formData.append('normalize', normalize);
+		formData.append('category_name', category); // 发送分类
+
+		setStatus(`正在上传并处理音色: ${timbreName}... (此过程可能需要1-2分钟)`, 'info');
+		hideTimbreUploadModal();
+		
+		// UI反馈：禁用上传按钮，防止重复提交
+		dom.uploadTimbreLabelBtn.disabled = true;
+		dom.uploadTimbreLabelBtn.textContent = '正在处理新音色...';
+
+		try {
+			const response = await fetch('/api/upload_timbre', {
+				method: 'POST',
+				body: formData
+				// 注意：使用 FormData 时，浏览器会自动设置 Content-Type，不要手动设置
+			});
+			
+			const result = await response.json();
+			if (response.ok) {
+				setStatus(result.message, 'success');
+				await loadTimbres();
+			} else {
+				throw new Error(result.detail || '上传处理失败');
+			}
+
+		} catch (error) {
+			setStatus(`上传失败: ${error.message}`, 'error');
+		} finally {
+			// 无论成功失败，都恢复上传按钮
+			dom.uploadTimbreLabelBtn.disabled = false;
+			dom.uploadTimbreLabelBtn.textContent = '上传新音色';
+		}
+	}
+    
+	async function handleChapterSelectionChange() {
+        state.selectedChapterPaths = Array.from(dom.chapterListEl.querySelectorAll('.chapter-checkbox:checked')).map(cb => cb.value);
+        updateGlobalButtons();
+
+        // 查找所有相关的 DOM 元素
+        const editorView = dom.editorView;
+        const batchView = dom.batchView;
+        const editorFooter = document.getElementById('editor-footer');
+        const contentTable = dom.contentTable;
+        const rawTextView = document.getElementById('raw-text-view');
+        const rawTextTitle = document.getElementById('raw-text-title');
+        const rawTextContent = document.getElementById('raw-text-content');
+
+        // 通用清理
+        editorView.style.display = 'none';
+        batchView.style.display = 'none';
+        contentTable.style.display = 'none';
+        rawTextView.style.display = 'none';
+        editorFooter.style.display = 'none';
+        dom.editorTitleText.textContent = '内容编辑器';
+
+        if (state.isProcessing || state.isTxtProcessing) {
+            batchView.style.display = 'flex';
+            dom.batchViewMessage.textContent = '任务处理中，请稍候...';
+            return;
+        }
+        
+        const selectedCheckboxes = dom.chapterListEl.querySelectorAll('.chapter-checkbox:checked');
+
+        if (selectedCheckboxes.length === 1) {
+            editorView.style.display = 'block';
+            const checkbox = selectedCheckboxes[0];
+            const chapterTitle = checkbox.dataset.title;
+            const isProcessed = checkbox.closest('li').classList.contains('processed');
+            const isTxtChapter = checkbox.hasAttribute('data-txt-chapter');
+
+            // --- 核心逻辑分支 ---
+            if (isProcessed) {
+                // 情况 A：已处理章节 -> 显示表格编辑器
+                contentTable.style.display = 'table';
+                editorFooter.style.display = 'block';
+                const filepath = checkbox.value;
+                await loadSingleChapterForEditing(filepath);
+
+            } else if (isTxtChapter) {
+                // 情况 B：未处理的 TXT 章节 -> 显示原文预览
+                rawTextView.style.display = 'block';
+                rawTextTitle.textContent = `原文预览: ${chapterTitle}`;
+                rawTextContent.textContent = '正在加载原文...';
+                try {
+                    const payload = {
+                        novel_name: state.novelName,
+                        chapter_title: chapterTitle,
+                        preview_only: true
+                    };
+                    const result = await fetchFromServer('/api/process_single_chapter', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (result.status === 'preview') {
+						// 使用正则表达式将两个或更多的连续换行符，替换为单个换行符
+						const formattedContent = result.content.replace(/(\r\n|\n|\r){2,}/g, '\n\n');
+						rawTextContent.textContent = formattedContent;
+                    } else {
+                        throw new Error('后端未返回预览内容。');
+                    }
+                } catch (error) {
+                    rawTextContent.textContent = `加载原文失败: ${error.message}`;
+                }
+                
+            } else {
+                // 情况 C：其他情况（例如，旧版项目未处理的章节），显示提示
+                batchView.style.display = 'flex';
+                dom.batchViewMessage.textContent = '请先在左侧处理此章节。';
+            }
+            // ---
+
+        } else { // 选中 0 个或多个
+            batchView.style.display = 'flex';
+            dom.batchViewMessage.textContent = selectedCheckboxes.length > 1 
+                ? `已选择 ${selectedCheckboxes.length} 个章节。请使用顶部全局按钮进行批量操作。` 
+                : `请在左侧选择一个章节以显示内容。`;
+        }
+        
+        // 无论哪种情况，都需要加载角色列表（即使是空的）
+        await loadCharacters();
+	}
+	
+	// 差异点：在 loadSingleChapterForEditing 函数中添加缓存破坏参数
+	async function loadSingleChapterForEditing(filepath) {
+		setStatus(`正在加载章节内容...`);
+		try {
+			// --- 核心修改开始 ---
+			// Create a unique URL for each request to prevent caching.
+			const cacheBuster = `&_t=${new Date().getTime()}`;
+			const url = `/api/get_novel_content?filepath=${filepath}${cacheBuster}`;
+			
+			// Use the new URL to fetch data.
+			state.novelData = await fetchFromServer(url);
+			// --- 核心修改结束 ---
+			
+			await loadTimbres(); 
+
+			state.generatedFiles = {};
+			renderContentTable();
+			await checkAllPlayableFiles();
+		} catch (e) {
+			setStatus(`加载章节内容失败: ${e.message}`, 'error');
+			state.novelData = [];
+			renderContentTable();
+		}
+	}
+
+	function renderContentTable() {
+		const placeholder = dom.editorView.querySelector('.placeholder-text');
+		const editorFooter = document.getElementById('editor-footer');
+
+		if (state.novelData.length === 0) {
+			dom.contentTable.style.display = 'none';
+			placeholder.style.display = 'block';
+			editorFooter.style.display = 'none';
+			dom.contentTitle.textContent = '内容编辑器';
+			return;
+		}
+		dom.contentTable.style.display = 'table';
+		placeholder.style.display = 'none';
+		editorFooter.style.display = 'block';
+		dom.saveChapterBtn.disabled = true;
+		
+		const pathParts = state.selectedChapterPaths[0].replace('.json', '').split(/[/\\]/);
+		const currentChapterName = pathParts.length > 1 ? pathParts[1] : pathParts[0];
+		dom.editorTitleText.textContent = `内容编辑器: ${state.novelName} / ${currentChapterName}`;
+		
+		let ttsOptionsHtml = '';
+		const ttsModels = state.globalConfig?.tts_models || {};
+		const defaultTtsModel = state.globalConfig?.general?.default_tts_model || '';
+		for (const modelId in ttsModels) {
+			const model = ttsModels[modelId];
+			const isSelected = modelId === defaultTtsModel ? 'selected' : '';
+			ttsOptionsHtml += `<option value="${modelId}" ${isSelected}>${model.display_name || modelId}</option>`;
+		}
+
+		const isCosyVoiceDefault = defaultTtsModel.includes('cosyvoice');
+		const modeSelectDisabledAttr = isCosyVoiceDefault ? '' : 'disabled';
+		
+		let tableHTML = '';
+		state.novelData.forEach((item, index) => {
+			const timbreOverride = item.timbre_override;
+			const characterTimbre = state.characterMapping[item.speaker];
+			const assignedTimbre = timbreOverride || characterTimbre;
+			const isAssigned = !!assignedTimbre;
+
+			// --- 核心修改 1: 根据音色是否有效，决定“生成”按钮的状态 ---
+			const generateBtnDisabled = isAssigned ? '' : 'disabled';
+
+			let timbreSelectHtml = '';
+			const timbreOptions = state.allTimbres.map(t => 
+				`<option value="${t}" ${t === assignedTimbre ? 'selected' : ''}>${t}</option>`
+			).join('');
+
+			if (isAssigned) {
+				let finalOptions = timbreOptions;
+				if (!state.allTimbres.includes(assignedTimbre)) {
+					finalOptions += `<option value="${assignedTimbre}" selected disabled class="placeholder-option">${assignedTimbre} (已丢失)</option>`;
+				}
+				timbreSelectHtml = `<select class="timbre-override-select" data-row-index="${index}" style="width: 100%;">${finalOptions}</select>`;
+			} else {
+				timbreSelectHtml = `<select class="timbre-override-select" data-row-index="${index}" style="width: 100%;">
+										<option value="" disabled selected class="placeholder-option">-- 请选择音色 --</option>
+										${timbreOptions}
+									</select>`;
+			}
+
+			tableHTML += `<tr id="content-row-${index}">
+				<td class="row-actions">
+					<button class="btn btn-danger btn-delete-row" data-index="${index}" title="删除此行">X</button>
+					<button class="btn btn-insert-row" data-index="${index}" title="在此行下方插入新行">+</button>
+				</td>
+				<td>${index + 1}</td>
+				<td>${item.speaker}</td>
+				<td>${timbreSelectHtml}</td>
+				<td class="content-cell" contenteditable="true">${item.content}</td>
+				<td>
+					<select class="tts-model-select" style="width: 100%; padding: 0.3rem;">
+						${ttsOptionsHtml}
+					</select>
+				</td>
+				<td>
+					<div class="actions-cell">
+						<!-- 第一行: 生成, 播放 -->
+						<div class="action-row">
+							<button class="btn btn-primary btn-generate" ${generateBtnDisabled}>生成音频</button>
+							<button class="btn-play audio-player-btn" title="播放" disabled>▶</button>
+						</div>
+
+						<!-- 第二行: 特效按钮, 以及模式/指令的组合 -->
+						<div class="action-row">
+							
+							<!-- 左侧: 特效按钮 -->
+							<div class="popover-container">
+								<button class="btn-effects" disabled>特效</button>
+								<div class="popover-content">
+									<ul class="effects-menu">
+										<li><button data-effect="reverb"><span>🔊</span> 室内回声</button></li>
+										<li><button data-effect="phone"><span>📞</span> 通话</button></li>
+										<li><button data-effect="megaphone"><span>📣</span> 喇叭</button></li>
+										<li style="border-top: 1px solid var(--border-color); margin-top: 0.25rem; padding-top: 0.25rem;"><button data-effect="choral"><span>👨‍👩‍👧‍👦</span> 多人同声</button></li>
+									</ul>
+								</div>
+							</div>
+
+							<!-- 右侧: 模式和指令的垂直组合容器 -->
+							<div class="mode-instruct-group">
+								<select class="mode-select" ${modeSelectDisabledAttr}>
+									<option value="zero_shot" selected>普通</option>
+									<option value="cross_lingual">精细</option>
+									<option value="instruct">指令</option>
+								</select>
+								<input type="text" class="instruct-input" placeholder="请输入指令 (例如：用四川话说)">
+							</div>
+
+						</div>
+					</div>
+				</td>
+			</tr>`;
+		});
+		dom.contentTableBody.innerHTML = tableHTML;
+	}
+
+    async function checkAllPlayableFiles() {
+		if (state.novelData.length === 0 || state.selectedChapterPaths.length !== 1) return;
+		setStatus('正在检查已生成的文件...', 'info');
+		let foundCount = 0;
+		const path = state.selectedChapterPaths[0];
+		const pathParts = path.replace('.json', '').split(/[/\\]/);
+		const currentChapterName = pathParts.length > 1 ? pathParts[1] : pathParts[0];
+
+		for(let i=0; i<state.novelData.length; i++) {
+			const currentRow = document.getElementById(`content-row-${i}`);
+			if (!currentRow) continue;
+			
+			const playBtn = currentRow.querySelector('.btn-play');
+			const effectsBtn = currentRow.querySelector('.btn-effects');
+			const speaker = state.novelData[i].speaker;
+			
+			// --- 核心修改：从下拉框获取当前最终确定的音色 ---
+			const timbreSelect = currentRow.querySelector('.timbre-override-select');
+			const timbre = timbreSelect ? timbreSelect.value : null;
+
+			let fileExists = false;
+			if (timbre) { // 仅当音色有效时才检查
+				const expectedFileName = `${String(i).padStart(4, '0')}-${speaker}-${timbre}.wav`.replace(/[\\/:*?"<>|]/g, '_');
+				const expectedFilePath = `/output/${state.novelName}/wavs/${currentChapterName}/${expectedFileName}`;
+				
+				if (await checkFileExists(expectedFilePath)) {
+					fileExists = true;
+					state.generatedFiles[i] = expectedFileName;
+					foundCount++;
+				}
+			}
+			
+			// --- 核心修改：根据文件是否存在，更新按钮状态和样式 ---
+			if (playBtn) {
+				playBtn.disabled = !fileExists;
+				if (fileExists) {
+					playBtn.classList.add('playable'); // <-- 添加 playable 类
+				} else {
+					playBtn.classList.remove('playable'); // <-- 移除 playable 类
+				}
+			}
+			if (effectsBtn) {
+				effectsBtn.disabled = !fileExists;
+			}
+		}
+		setStatus(`检查完毕，找到 ${foundCount} 个匹配文件。`, 'success');
+	}
+        
+    async function loadTimbreDetails(name) {
+        if (state.timbreDetails[name]) return Promise.resolve(state.timbreDetails[name]);
+        try {
+            const encodedName = encodeURIComponent(name);
+            const [audioResponse, textResponse] = await Promise.all([
+                fetch(`/wav/${encodedName}/1.wav`),
+                fetch(`/wav/${encodedName}/1.txt`)
+            ]);
+            if (!audioResponse.ok || !textResponse.ok) throw new Error(`音色'${name}'的文件不完整`);
+            const promptAudio = await toBase64(await audioResponse.blob());
+            const promptText = await textResponse.text();
+            const details = { promptAudio, promptText };
+            state.timbreDetails[name] = details;
+            return details;
+        } catch (e) {
+            setStatus(`加载音色'${name}'详情失败: ${e.message}`, 'error');
+            throw e;
+        }
+    }
+
+    // 2. generateSpeech(payload)
+    async function generateSpeech(payload) {
+        // *** 核心修改 1: 实现重试逻辑 ***
+        const MAX_RETRIES = 3; // 1次初次尝试 + 2次重试
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                // Note: This function now expects the payload to already contain prompt_audio and prompt_text
+                const result = await fetchFromServer('/api/tts_v2', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (result.status === 'success') {
+                    // 如果成功，立即返回文件名
+                    return result.file_name;
+                } else {
+                    // 如果API返回了一个已知的错误状态，也视为失败
+                    throw new Error(result.message || 'API returned a non-success status.');
+                }
+            } catch (error) {
+                const errorMessage = `生成失败 (行: ${payload.row_index + 1}, 尝试: ${attempt}/${MAX_RETRIES}): ${error.message}`;
+                setStatus(errorMessage, 'error');
+                console.error(errorMessage, error);
+
+                if (attempt === MAX_RETRIES) {
+                    // 如果这是最后一次尝试，则放弃并返回 null
+                    setStatus(`已达到最大重试次数，跳过此行。`, 'warning');
+                    return null;
+                }
+                
+                // 如果不是最后一次尝试，等待一段时间再重试
+                await new Promise(resolve => setTimeout(resolve, 2000)); // 等待2秒
+            }
+        }
+        return null; // 理论上不会执行到这里，但作为安全保障
+    }
+	
+	async function processAllAndSplice() {
+		if (state.isProcessing) {
+			state.isProcessingCancelled = true;
+			setStatus('中止指令已发出，正在等待当前任务完成...', 'warning');
+            updateGlobalButtons();
+			return;
+		}
+
+		const chaptersToProcess = state.selectedChapterPaths.filter(path => path.includes('.json'));
+		if (chaptersToProcess.length === 0) {
+			setStatus("没有已处理的章节被选中，无法生成。", "warning");
+			return;
+		}
+
+		state.isProcessing = true;
+		state.isProcessingCancelled = false;
+		updateGlobalButtons();
+		dom.globalProgress.style.display = 'block';
+		dom.globalProgressBar.style.width = '0%';
+		
+		const totalChapters = chaptersToProcess.length;
+		let chaptersProcessed = 0;
+        let successfullySplicedChapters = [];
+
+		try {
+			await requestWakeLock(); // <-- 新增
+			for (const chapterPath of chaptersToProcess) {
+				if (state.isProcessingCancelled) { setStatus(`处理已中止...`, 'warning'); break; }
+				
+				const pathParts = chapterPath.replace('.json', '').split(/[/\\]/);
+				const currentNovelName = pathParts[0];
+				const currentChapterName = pathParts.length > 1 ? pathParts[1] : pathParts[0];
+				
+				setStatus(`[${chaptersProcessed + 1}/${totalChapters}] 加载章节: ${currentChapterName}...`);
+
+				const chapterData = await fetchFromServer(`/api/get_novel_content?filepath=${encodeURIComponent(chapterPath)}`);
+
+				const filesToSplice = [];
+				const totalRows = chapterData.length;
+                let chapterGenerationOk = true; // 本章节生成状态标志
+
+				for (let i = 0; i < totalRows; i++) {
+					if (state.isProcessingCancelled) { setStatus(`处理已中止...`, 'warning'); break; }
+					
+					const progress = ((chaptersProcessed / totalChapters) + ((i + 1) / totalRows) / totalChapters) * 100 * 0.9;
+					dom.globalProgressBar.style.width = `${progress}%`;
+					setStatus(`[${chaptersProcessed + 1}/${totalChapters}] ${currentChapterName}: 处理中 ${i + 1}/${totalRows}...`);
+
+					const item = chapterData[i];
+                    
+                    // --- 核心智能判断逻辑 ---
+                    // 1. 优先使用行内指定的 `timbre_override` 音色
+                    let timbre_to_use = item.timbre_override;
+
+                    // 2. 如果没有行内指定，则回退到使用角色的全局配置音色
+                    if (!timbre_to_use) {
+                        timbre_to_use = state.characterMapping[item.speaker];
+                    }
+
+                    // 3. 如果两种方式都找不到音色，则标记本章为失败并中断
+					if (!timbre_to_use) { 
+                        setStatus(`错误: 角色'${item.speaker}'在第 ${i+1} 行未分配任何音色，已跳过本章节。`, 'error');
+                        chapterGenerationOk = false;
+                        break; 
+                    }
+                    
+                    // --- 后续所有逻辑，都使用 timbre_to_use ---
+                    const currentTimbre = timbre_to_use;
+					const expectedFileName = `${String(i).padStart(4, '0')}-${item.speaker}-${currentTimbre}.wav`.replace(/[\\/:*?"<>|]/g, '_');
+					const expectedFilePath = `/output/${currentNovelName}/wavs/${currentChapterName}/${expectedFileName}`;
+					
+					if (await checkFileExists(expectedFilePath)) {
+						filesToSplice.push(expectedFileName);
+					} else {
+						const payload = {
+							novel_name: currentNovelName, 
+                            chapter_name: currentChapterName, 
+                            row_index: i, 
+							speaker: item.speaker, 
+                            timbre: currentTimbre, 
+                            tts_text: item.content,
+							inference_mode: item.inference_mode || 'zero_shot', 
+							instruct_text: item.instruct_text || ''          
+						};
+						const details = await loadTimbreDetails(currentTimbre);
+						payload.prompt_audio = details.promptAudio;
+						payload.prompt_text = details.promptText;
+						
+                        const generatedFile = await generateSpeech(payload);
+						
+                        if (generatedFile) {
+                            filesToSplice.push(generatedFile);
+                        } else {
+                            setStatus(`章节 "${currentChapterName}" 第 ${i + 1} 行生成失败，已跳过本章节的后续处理。`, 'error');
+                            chapterGenerationOk = false;
+                            break;
+                        }
+					}
+				}
+				if (state.isProcessingCancelled) break;
+
+                // 拼接前的完整性检查逻辑保持不变
+				if (chapterGenerationOk) {
+                    setStatus(`[${chaptersProcessed + 1}/${totalChapters}] ${currentChapterName}: 所有音频已就绪，正在拼接...`);
+                    const splicePayload = { 
+                        novel_name: currentNovelName, 
+                        chapter_name: currentChapterName, 
+                        wav_files: filesToSplice
+                    };
+                    const result = await fetchFromServer('/api/splice_audio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(splicePayload) });
+                    if (result.status !== 'success') throw new Error(result.message || "拼接失败");
+                    
+                    setStatus(`[${chaptersProcessed + 1}/${totalChapters}] 章节 "${currentChapterName}" 处理完成!`, 'success');
+                    chaptersProcessed++;
+                    successfullySplicedChapters.push(currentChapterName);
+                } else {
+                    console.warn(`Skipping splice for ${currentChapterName} due to generation failures or cancellation.`);
+                }
+			}
+		} catch(error) {
+			setStatus(`批量处理失败: ${error.message}`, 'error');
+		} finally {
+			await releaseWakeLock(); // <-- 新增
+            // finally 块中的其他代码保持不变...
+			state.isProcessing = false;
+			state.isProcessingCancelled = false;
+			
+            if (!state.isProcessingCancelled && chaptersProcessed === totalChapters && totalChapters > 0) {
+				 setStatus('所有选定章节已处理完成！', 'success');
+				 dom.globalProgressBar.style.width = '100%';
+			}
+
+            if (successfullySplicedChapters.length > 0 || state.isProcessingCancelled) {
+                setStatus('处理结束', 'info');
+                const currentNovel = dom.novelSelector.value; // 1. 保存当前选择
+                await loadNovels(false); // 2. 调用 loadNovels，但传入 false，只更新 state 数据
+                renderChapterList();  // 3. 用新数据重新渲染章节列表
+                // const currentNovelName = dom.novelSelector.value; // 这句不再需要
+                dom.chapterListEl.querySelectorAll('.chapter-checkbox').forEach(cb => {
+                    const cbNovel = cb.value.split('/')[0];
+                    if (cbNovel === currentNovel && state.selectedChapterPaths.includes(cb.value)) {
+                        cb.checked = true;
+                    }
+                });
+            }
+
+            updateGlobalButtons();
+			setTimeout(() => { dom.globalProgress.style.display = 'none'; }, 5000);
+		}
+	}
+	
+    // 4. showProfileModal(characterName)
+    async function showProfileModal(characterName) {
+        dom.profileModalTitle.textContent = `角色简介: ${characterName}`;
+        dom.profileModalBody.innerHTML = '正在加载...';
+        dom.profileModal.style.display = 'flex';
+        try {
+            const encodedCharName = encodeURIComponent(characterName);
+            const data = await fetchFromServer(`/api/get_character_profile?novel_name=${state.novelName}&character_name=${encodedCharName}`);
+            let html = '<dl>';
+            html += `<dt>性别</dt><dd>${data.gender || '未知'}</dd>`;
+            html += `<dt>年龄段</dt><dd>${data.ageGroup || '未知'}</dd>`;
+            html += `<dt>身份</dt><dd>${data.identity || '未知'}</dd>`;
+            html += '</dl>';
+            dom.profileModalBody.innerHTML = html;
+        } catch (error) {
+            dom.profileModalBody.textContent = `加载简介失败: ${error.message}`;
+        }
+    }
+
+    // 5. qualityOptions object
+    const qualityOptions = {
+        mp3: ['128k', '192k', '256k', '320k'],
+        wav: ['无损 (PCM 16-bit)'],
+        m4a: ['128k', '192k', '256k'],
+        ogg: ['q5 (约160k)', 'q7 (约224k)', 'q9 (约320k)']
+    };
+
+    // 6. updateQualityOptions()
+	function updateQualityOptions() {
+		const format = dom.exportFormat.value;
+		const qualities = qualityOptions[format];
+		dom.exportQuality.innerHTML = '';
+		qualities.forEach(q => {
+			const option = document.createElement('option');
+			const value = (format === 'ogg') ? q.split(' ')[0] : (format === 'wav' ? 'pcm_s16le' : q);
+			option.value = value;
+			option.textContent = q;
+			dom.exportQuality.appendChild(option);
+		});
+		dom.exportQuality.disabled = (format === 'wav');
+
+		// --- 核心修复 ---
+		// 从 state.globalConfig.audio_export 读取数据，而不是旧的 state.exportSettings
+		// 同时增加健壮性检查，防止 state.globalConfig 还未加载时出错
+		const audioExportConfig = state.globalConfig?.audio_export;
+		if (audioExportConfig && audioExportConfig.format === format) {
+			dom.exportQuality.value = audioExportConfig.quality;
+		} else {
+			// 如果格式不匹配或配置不存在，默认选中第一个
+			dom.exportQuality.selectedIndex = 0;
+		}
+	}
+    
+    
+	function updateGlobalButtons() {
+		const selectedCheckboxes = dom.chapterListEl.querySelectorAll('.chapter-checkbox:checked');
+		const selectedCount = selectedCheckboxes.length;
+		
+		 // --- 按钮状态的统一控制 ---
+
+		 // A. 筛选出不同类型的选中项
+		 const processableTxtCheckboxes = Array.from(selectedCheckboxes).filter(cb => {
+			 return cb.hasAttribute('data-txt-chapter');
+		 });
+		 const processableTxtCount = processableTxtCheckboxes.length;
+		 
+		 const processableJsonCheckboxes = Array.from(selectedCheckboxes).filter(cb => cb.value.includes('.json'));
+		 const processableJsonCount = processableJsonCheckboxes.length;
+		 
+		 // B. 控制 “处理文本” 按钮
+		 if (state.isTxtProcessing) {
+			 dom.processTxtBtn.textContent = '停止处理';
+			 dom.processTxtBtn.classList.add('btn-danger');
+			 dom.processTxtBtn.disabled = state.isTxtProcessingCancelled; 
+			 if (state.isTxtProcessingCancelled) {
+				 dom.processTxtBtn.textContent = '正在停止...';
+			 }
+		 } else {
+			 dom.processTxtBtn.textContent = `处理文本 (${processableTxtCount})`;
+			 dom.processTxtBtn.classList.remove('btn-danger');
+			 dom.processTxtBtn.disabled = processableTxtCount === 0 || state.isProcessing;
+		 }
+		
+		// C. 控制 “生成声音” 按钮
+		if (state.isProcessing) {
+			dom.processAllBtn.textContent = '停止生成';
+			dom.processAllBtn.classList.remove('btn-primary');
+			dom.processAllBtn.classList.add('btn-danger');
+			dom.processAllBtn.disabled = state.isProcessingCancelled; 
+			 if (state.isProcessingCancelled) {
+				 dom.processAllBtn.textContent = '正在停止...';
+			 }
+		} else {
+			dom.processAllBtn.textContent = `生成语音 (${processableJsonCount})`;
+			dom.processAllBtn.classList.remove('btn-danger');
+			dom.processAllBtn.classList.add('btn-primary');
+			dom.processAllBtn.disabled = processableJsonCount === 0 || state.isTxtProcessing;
+		}
+
+		 // D. 控制 “下载声音” 按钮
+		 let hasSplicedChapter = false;
+		 if (state.novelName && state.allNovelsData[state.novelName] && !state.isProcessing && !state.isTxtProcessing) {
+			 const novelChapters = state.allNovelsData[state.novelName].chapters;
+			 for (const checkbox of selectedCheckboxes) {
+				 const chapterTitle = checkbox.dataset.title;
+				 const chapterData = novelChapters.find(c => c.title === chapterTitle);
+				 if (chapterData && chapterData.spliced) {
+					 hasSplicedChapter = true;
+					 break;
+				 }
+			 }
+		 }
+		 dom.downloadSpliceBtn.disabled = state.isProcessing || state.isTxtProcessing || !hasSplicedChapter;
+		 
+		 // E. 控制 “播放声音” 按钮
+		let canPlayChapter = false;
+		if (selectedCount === 1) {
+			const checkbox = selectedCheckboxes[0];
+			if (checkbox.closest('li').classList.contains('spliced')) {
+				canPlayChapter = true;
+			}
+		}
+		dom.chapterPlayStopBtn.disabled = !canPlayChapter;
+
+
+		 // F. 全局处理状态下的禁用逻辑
+		 if (state.isProcessing || state.isTxtProcessing) {
+			 dom.novelSelector.disabled = true;
+			 dom.chapterListEl.querySelectorAll('input').forEach(cb => cb.disabled = true);
+		 } else {
+			 dom.novelSelector.disabled = false;
+			 dom.chapterListEl.querySelectorAll('input').forEach(cb => cb.disabled = false);
+		 }
+	}
+	
+	// --- 全新的音色库与管理器逻辑模块 ---
+	let timbreData = { categories: {}, unassigned: [] };
+
+	async function loadTimbres() {
+		try {
+			timbreData = await fetchFromServer('/api/timbres/data');
+            // 先将所有未分类音色加入
+            state.allTimbres = [...timbreData.unassigned];
+            // 遍历所有分类，将其下的音色也加入
+            for (const categoryName in timbreData.categories) {
+                state.allTimbres.push(...timbreData.categories[categoryName]);
+            }
+			
+			const filter = document.getElementById('categoryFilter');
+			const currentFilterValue = filter.value;
+			filter.innerHTML = `
+				<option value="all">-- 所有分类 --</option>
+				<option value="unassigned">-- 未分类 --</option>
+			`;
+			const sortedCategories = Object.keys(timbreData.categories).sort();
+			sortedCategories.forEach(cat => {
+				const option = document.createElement('option');
+				option.value = option.textContent = cat;
+				filter.appendChild(option);
+			});
+
+			if (Array.from(filter.options).some(opt => opt.value === currentFilterValue)) {
+				filter.value = currentFilterValue;
+			} else {
+				filter.value = 'all';
+			}
+			
+			renderTimbreList();
+		} catch(e) {
+			setStatus(`加载音色失败: ${e.message}`, 'error');
+			timbreData = { categories: {}, unassigned: [] };
+            state.allTimbres = []; // 错误时也清空，保持状态一致
+            state.timbreDetails = {};
+			renderTimbreList();
+		}
+	}
+
+	function renderTimbreList() {
+		dom.timbreListEl.innerHTML = '';
+		if (!timbreData) return;
+
+		const filterValue = document.getElementById('categoryFilter').value;
+		const { categories, unassigned } = timbreData;
+		let timbresToRender = [];
+
+		if (filterValue === 'all') {
+			timbresToRender = [...unassigned];
+			Object.values(categories).forEach(arr => timbresToRender.push(...arr));
+		} else if (filterValue === 'unassigned') {
+			timbresToRender = [...unassigned];
+		} else if (categories[filterValue]) {
+			timbresToRender = [...categories[filterValue]];
+		}
+
+		if (timbresToRender.length === 0) {
+			dom.timbreListEl.innerHTML = '<p class="placeholder-text">此分类/音色库下没有音色</p>';
+			return;
+		}
+
+		timbresToRender.sort().forEach(t => {
+			const li = document.createElement('li');
+			li.innerHTML = `<span class="label">${t}</span>
+						  <div class="timbre-actions">
+                            <div class="popover-container roles-popover" style="display: none; position: relative;">
+                                <button class="btn-show-roles" title="查看已分配角色">☰</button>
+                                <div class="popover-content" style="right: 105%; top: 50%; transform: translateY(-50%);">
+                                    <strong>已分配给:</strong>
+                                    <ul></ul>
+                                </div>
+                            </div>
+							<button class="btn btn-assign" data-timbre-name="${t}">分配</button>
+							<button class="audio-player-btn playable" data-timbre-name="${t}" title="试听 ${t}">▶</button>
+						  </div>`;
+			dom.timbreListEl.appendChild(li);
+		});
+		updateRelatedRolesPopovers();
+	}
+    
+	// === 5. EVENT LISTENERS ===	
+	
+	const dom_timbres_manager = {
+		openBtn: document.getElementById('manageTimbresBtn'),
+		modal: document.getElementById('timbresManageModal'),
+		closeBtn: document.getElementById('closeTimbresManageBtn'),
+		categoryList: document.getElementById('manager-category-list'),
+		newCatInput: document.getElementById('managerNewCategoryInput'),
+		addCatBtn: document.getElementById('managerAddCategoryBtn'),
+		timbresTitle: document.getElementById('manager-timbres-title'),
+		timbresList: document.getElementById('manager-timbres-list'),
+		uploadCategorySelect: document.getElementById('uploadTimbreCategory'),
+		categoryFilter: document.getElementById('categoryFilter')
+	};
+	let managerState = { selectedCategory: 'unassigned' };
+		
+	// 筛选主列表
+	dom_timbres_manager.categoryFilter.addEventListener('change', renderTimbreList);
+
+	dom_timbres_manager.openBtn.addEventListener('click', async () => {
+		dom_timbres_manager.modal.style.display = 'flex';
+		managerState.selectedCategory = 'unassigned';
+		try {
+			timbreData = await fetchFromServer('/api/timbres/data');
+			renderTimbresManager();
+		} catch(e) { setStatus(`加载音色数据失败: ${e.message}`, 'error'); }
+	});
+
+	dom_timbres_manager.closeBtn.addEventListener('click', () => {
+        stopAllAudio(); // 在关闭模态框前停止所有音频
+		dom_timbres_manager.modal.style.display = 'none';
+		loadTimbres();
+	});
+
+	dom_timbres_manager.categoryList.addEventListener('click', (e) => {
+		const li = e.target.closest('li');
+		if (li && li.dataset.categoryName) {
+			managerState.selectedCategory = li.dataset.categoryName;
+			renderTimbresManager();
+		}
+	});
+
+	dom_timbres_manager.addCatBtn.addEventListener('click', managerCreateCategory);
+	dom_timbres_manager.newCatInput.addEventListener('keypress', (e) => {
+		if (e.key === 'Enter') managerCreateCategory();
+	});
+
+	dom_timbres_manager.timbresList.addEventListener('click', async (e) => {
+        const target = e.target;
+        if (target.matches('.btn-move-timbre')) { // 使用更精确的选择器，只匹配“移动到”按钮
+            const timbreName = target.dataset.timbreName;
+            const popover = target.nextElementSibling;
+            let menuHtml = '<ul>';
+            menuHtml += `<li><button class="category-move-btn" data-timbre="${timbreName}" data-category="">-- 未分类 --</button></li>`;
+            Object.keys(timbreData.categories).sort().forEach(cat => {
+                if (cat !== managerState.selectedCategory) {
+                    menuHtml += `<li><button class="category-move-btn" data-timbre="${timbreName}" data-category="${cat}">${cat}</button></li>`;
+                }
+            });
+            menuHtml += '</ul>';
+            popover.innerHTML = menuHtml;
+        }
+        else if (target.matches('.category-move-btn')) {
+            const timbreName = target.dataset.timbre;
+            const categoryName = target.dataset.category;
+            try {
+                const result = await fetchFromServer('/api/timbres/move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ timbre_name: timbreName, category_name: categoryName })
+                });
+                timbreData = result.data;
+                renderTimbresManager();
+            } catch(e) { alert(`移动失败: ${e.message}`); }
+        }
+        else if (target.matches('.btn-delete-timbre')) {
+            const timbreName = target.dataset.timbreName;
+            if (!confirm(`您确定要永久删除音色「${timbreName}」吗？`)) return;
+            try {
+                await fetchFromServer(`/api/delete_timbre?timbre_name=${encodeURIComponent(timbreName)}`, { method: 'DELETE' });
+                // 删除后，需要更新本地的 timbreData 并重新渲染
+                if (managerState.selectedCategory === 'unassigned') {
+                    timbreData.unassigned = timbreData.unassigned.filter(t => t !== timbreName);
+                } else {
+                    timbreData.categories[managerState.selectedCategory] = timbreData.categories[managerState.selectedCategory].filter(t => t !== timbreName);
+                }
+                renderTimbresManager();
+                setStatus('音色删除成功！', 'success');
+            } catch (error) { 
+                setStatus(`删除音色失败: ${error.message}`, 'error'); 
+            }
+        }
+        // *** 核心修改：为播放按钮添加逻辑 ***
+        else if (target.matches('.audio-player-btn')) {
+            const timbreName = target.dataset.timbreName;
+            if (timbreName) {
+                toggleSimpleAudio(target, `/wav/${timbreName}/1.wav`);
+            } else {
+                setStatus('错误：未能获取音色名称进行播放。', 'error');
+            }
+        }
+    });
+	
+	dom.uploadTimbreLabelBtn.addEventListener('click', async () => {
+		try {
+			const data = await fetchFromServer('/api/timbres/data');
+			const select = dom_timbres_manager.uploadCategorySelect;
+			select.innerHTML = '<option value="">-- 不归类 --</option>';
+			Object.keys(data.categories).sort().forEach(cat => {
+				const option = document.createElement('option');
+				option.value = option.textContent = cat;
+				select.appendChild(option);
+			});
+		} catch (e) { console.error("加载分类失败:", e); }
+		dom.timbreFile.click();
+	});
+
+	// --- 恢复的、只处理分配和播放的 timbreListEl 事件监听器 ---
+	dom.timbreListEl.addEventListener('click', async (e) => {
+		const target = e.target;
+		if (target.matches('.btn-assign')) {
+			if (!state.selectedCharacter) { alert('请先在角色列表中点击选中一个角色！'); return; }
+			const timbreName = target.dataset.timbreName;
+			state.characterMapping[state.selectedCharacter] = timbreName;
+			await loadCharacters();
+			if (state.selectedChapterPaths.length === 1 && dom.contentTable.style.display === 'table') {
+				renderContentTable();
+				await checkAllPlayableFiles();
+			}
+            updateRelatedRolesPopovers();
+			setStatus(`已将音色 '${timbreName}' 分配给角色 '${state.selectedCharacter}'`, 'success');
+		}
+		else if (target.matches('.audio-player-btn')) { 
+			toggleSimpleAudio(target, `/wav/${target.dataset.timbreName}/1.wav`);
+		}
+	});
+	
+
+	// 【核心补充】渲染管理器UI的完整函数
+	function renderTimbresManager() {
+		const { categories, unassigned } = timbreData;
+		
+		// 1. 渲染左侧分类列表
+		let catListHtml = `<ul class="info-list">`;
+		// “未分类”项
+		catListHtml += `<li class="selectable ${managerState.selectedCategory === 'unassigned' ? 'selected' : ''}" data-category-name="unassigned">
+							<span class="label">未分类</span>
+							<span class="value">${unassigned.length}</span>
+						</li>`;
+		// 其他分类项
+		Object.keys(categories).sort().forEach(catName => {
+			catListHtml += `<li class="selectable ${managerState.selectedCategory === catName ? 'selected' : ''}" data-category-name="${catName}">
+								<span class="label">${catName}</span>
+								<span class="value">${categories[catName].length}</span>
+							</li>`;
+		});
+		catListHtml += `</ul>`;
+		dom_timbres_manager.categoryList.innerHTML = catListHtml;
+
+		// 2. 渲染右侧音色列表
+		dom_timbres_manager.timbresTitle.textContent = managerState.selectedCategory === 'unassigned' ? '未分类音色' : `分类: ${managerState.selectedCategory}`;
+		let timbresToShow = managerState.selectedCategory === 'unassigned' ? unassigned : categories[managerState.selectedCategory];
+		
+		if (!timbresToShow || timbresToShow.length === 0) {
+			dom_timbres_manager.timbresList.innerHTML = '<p class="placeholder-text">此分类下没有音色</p>';
+			return;
+		}
+
+		let timbreListHtml = '';
+		timbresToShow.forEach(timbreName => {
+			timbreListHtml += `<li>
+								<span class="label">${timbreName}</span>
+								<div class="timbre-actions">
+									<div class="popover-container">
+										<button class="btn btn-move-timbre" data-timbre-name="${timbreName}">移动到</button>
+										<div class="popover-content category-menu"></div>
+									</div>
+                                    <button class="audio-player-btn playable" data-timbre-name="${timbreName}" title="试听 ${timbreName}">▶</button>
+									<button class="btn btn-danger btn-delete-timbre" data-timbre-name="${timbreName}" title="删除音色">X</button>
+								</div>
+							   </li>`;
+		});
+		dom_timbres_manager.timbresList.innerHTML = timbreListHtml;
+        updateRelatedRolesPopovers(); //
+	}
+
+	// 创建新分类
+	async function managerCreateCategory() {
+		const newName = dom_timbres_manager.newCatInput.value.trim();
+		if (!newName) return;
+		try {
+			const result = await fetchFromServer('/api/timbres/categories', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ category_name: newName })
+			});
+			timbreData = result.data; // 使用后端返回的最新数据
+			managerState.selectedCategory = newName; // 选中新创建的分类
+			renderTimbresManager();
+			dom_timbres_manager.newCatInput.value = '';
+		} catch (e) { alert(`创建失败: ${e.message}`); }
+	}
+
+    // --- State for the modal ---
+    let charManageState = { allChars: [], selectedChars: [] };
+
+    // --- Helper functions for the modal ---
+    function renderCharManageList() {
+        const listEl = dom.charManageList;
+        const searchTerm = dom.charSearchInput.value.toLowerCase();
+        listEl.innerHTML = '';
+        
+        const filteredChars = charManageState.allChars.filter(c => c.toLowerCase().includes(searchTerm));
+
+        filteredChars.forEach(char => {
+            const isChecked = charManageState.selectedChars.includes(char);
+            const label = document.createElement('label');
+            label.className = 'info-list-item'; // Simple styling
+            label.style.display = 'flex'; label.style.padding = '0.4rem'; label.style.cursor = 'pointer';
+            label.innerHTML = `<input type="checkbox" class="char-manage-cb" value="${char}" ${isChecked ? 'checked' : ''}> ${char}`;
+            listEl.appendChild(label);
+        });
+    }
+
+    function updateMergeControls() {
+        const selected = charManageState.selectedChars;
+        dom.charsToMerge.innerHTML = selected.map(c => `<span class="badge" style="background: #e8f0fe; padding: 2px 6px; border-radius: 4px; margin: 2px;">${c}</span>`).join(' ');
+        
+        const selectEl = dom.targetCharSelect;
+        selectEl.innerHTML = '';
+        if (selected.length > 0) {
+            selected.forEach(c => {
+                const option = document.createElement('option');
+                option.value = option.textContent = c;
+                selectEl.appendChild(option);
+            });
+            selectEl.disabled = false;
+        } else {
+            selectEl.disabled = true;
+        }
+
+        dom.confirmMergeBtn.disabled = selected.length < 2;
+    }
+
+    // --- Event Listeners for the modal ---
+    dom.manageCharactersBtn.addEventListener('click', async () => {
+        if (!state.novelName) return;
+
+        setStatus('正在获取所有角色列表...', 'info');
+        dom.charManageModal.style.display = 'flex';
+        dom.charManageList.innerHTML = '<p class="placeholder-text">加载中...</p>';
+        
+        charManageState = { allChars: [], selectedChars: [] }; // Reset state
+        updateMergeControls();
+
+        try {
+            // *** 核心修改 1: 在打开时，先强制刷新一次小说数据 ***
+            // 这能确保 state.allNovelsData 包含最新的 processed 和 spliced 状态
+            await loadNovels();
+            // 在下拉框中重新选中当前小说，以防列表顺序变化
+            dom.novelSelector.value = state.novelName;
+            
+            const novelData = state.allNovelsData[state.novelName];
+
+            if (!novelData || !novelData.chapters) {
+                throw new Error("无法获取当前小说的章节数据。");
+            }
+		
+			const selectedChapterFiles = Array.from(dom.chapterListEl.querySelectorAll('.chapter-checkbox:checked'))
+				.filter(cb => cb.value.endsWith('.json')) // 确保是已处理的章节
+				.map(cb => cb.value.split(/[/\\]/).pop()); // 只取文件名部分
+
+			if (selectedChapterFiles.length === 0) {
+				 dom.charManageList.innerHTML = '<p class="placeholder-text">请先在左侧至少选择一个【已处理】的章节。</p>';
+				 setStatus('请先选择已处理的章节以管理角色。', 'warning');
+				 return;
+			}
+            
+			console.log(`[Char Manage] Requesting characters from ${selectedChapterFiles.length} selected files.`);
+
+            const payload = { novel_name: state.novelName, chapter_files: selectedChapterFiles  };
+            const data = await fetchFromServer('/api/get_characters_in_chapters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            
+            if (!data.characters || data.characters.length === 0) {
+                dom.charManageList.innerHTML = '<p class="placeholder-text">在已处理的章节中未发现任何角色名。</p>';
+            } else {
+                charManageState.allChars = (data.characters || []).filter(c => c !== '旁白').sort();
+                renderCharManageList();
+            }
+            
+            setStatus('角色列表加载完毕。', 'success');
+
+        } catch (error) {
+            dom.charManageList.innerHTML = `<p class="placeholder-text" style="color:var(--danger-color);">加载角色失败: ${error.message}</p>`;
+            setStatus(`加载角色失败: ${error.message}`, 'error');
+        }
+    });
+    
+    dom.charSearchInput.addEventListener('input', renderCharManageList);
+
+    dom.charManageList.addEventListener('change', e => {
+        if (e.target.matches('.char-manage-cb')) {
+            const charName = e.target.value;
+            if (e.target.checked) {
+                if (!charManageState.selectedChars.includes(charName)) {
+                    charManageState.selectedChars.push(charName);
+                }
+            } else {
+                charManageState.selectedChars = charManageState.selectedChars.filter(c => c !== charName);
+            }
+            updateMergeControls();
+        }
+    });
+
+    dom.confirmMergeBtn.addEventListener('click', async () => {
+        const targetName = dom.targetCharSelect.value;
+        const sourceNames = charManageState.selectedChars.filter(c => c !== targetName);
+
+        if (!targetName || sourceNames.length === 0) {
+            alert('请确保已选择主角色，并且至少有一个其他角色要被合并。');
+            return;
+        }
+        
+        if (!confirm(`确定要将 ${sourceNames.join(', ')} 合并到 ${targetName} 吗？\n此操作将修改所有章节文件，且不可撤销。`)) {
+            return;
+        }
+
+        setStatus('正在执行合并操作...', 'info');
+        dom.confirmMergeBtn.disabled = true;
+        dom.confirmMergeBtn.textContent = '合并中...';
+
+        try {
+			const selectedChapterFiles = Array.from(dom.chapterListEl.querySelectorAll('.chapter-checkbox:checked'))
+				.filter(cb => cb.value.endsWith('.json'))
+				.map(cb => cb.value.split(/[/\\]/).pop());
+
+			if (selectedChapterFiles.length === 0) {
+				alert('执行合并前，必须在左侧列表中至少选择一个章节。');
+				return;
+			}
+			
+            const payload = {
+                novel_name: state.novelName,
+                target_name: targetName,
+                source_names: sourceNames,
+				chapter_files: selectedChapterFiles
+            };
+            const result = await fetchFromServer('/api/merge_characters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            setStatus(result.message, 'success');
+            dom.charManageModal.style.display = 'none';
+
+            // 关键：刷新所有相关UI
+            await loadNovels();
+            renderChapterList();
+            await loadAndApplyConfig(); // 加载更新后的音色配置
+            await loadCharacters();     // 刷新角色列表
+            // 如果编辑器开着，也刷新它
+            if (state.selectedChapterPaths.length === 1 && dom.editorView.style.display === 'block') {
+                await loadSingleChapterForEditing(state.selectedChapterPaths[0]);
+            }
+
+        } catch (error) {
+            setStatus(`合并失败: ${error.message}`, 'error');
+            alert(`合并失败: ${error.message}`);
+        } finally {
+            dom.confirmMergeBtn.disabled = false;
+            dom.confirmMergeBtn.textContent = '确认合并';
+        }
+    });
+
+    dom.closeCharManageBtn.addEventListener('click', () => {
+        dom.charManageModal.style.display = 'none';
+    });
+	
+    // *** 核心修改 5: 添加打开和处理“多人同声”模态框的函数 ***
+    function openChoralModal(rowIndex) {
+        dom.choralModal.style.display = 'flex';
+        const listEl = dom.choralTimbreList;
+        listEl.innerHTML = ''; // 清空旧列表
+		
+		const speaker = state.novelData[rowIndex] ? state.novelData[rowIndex].speaker : null;
+		const timbre = speaker ? state.characterMapping[speaker] : null;
+
+		// 增加健壮性检查，如果无法获取角色或音色信息，则不继续执行
+		if (!speaker || !timbre) {
+			alert(`无法为第 ${rowIndex + 1} 行执行此操作，因为缺少角色或音色配置。`);
+			dom.choralModal.style.display = 'none'; // 关闭模态框
+			return;
+		}
+
+        // 用 state.allTimbres 填充列表
+        state.allTimbres.forEach(timbre => {
+            const label = document.createElement('label');
+            label.style.display = 'block';
+            label.style.padding = '0.4rem';
+            label.style.cursor = 'pointer';
+            label.innerHTML = `<input type="checkbox" class="choral-timbre-cb" value="${timbre}"> ${timbre}`;
+            listEl.appendChild(label);
+        });
+
+        // 为“确认”按钮绑定一次性事件监听器
+        const handleConfirm = async () => {
+            const selectedTimbres = Array.from(listEl.querySelectorAll('.choral-timbre-cb:checked')).map(cb => cb.value);
+            
+            if (selectedTimbres.length < 2) {
+                alert('请至少选择两个音色以产生多人同声效果。');
+                return;
+            }
+
+            // 关闭模态框并开始处理
+            dom.choralModal.style.display = 'none';
+            setStatus(`正在生成 ${selectedTimbres.length} 人同声效果...`, 'info');
+
+            const pathParts = state.selectedChapterPaths[0].replace('.json', '').split(/[/\\]/);
+            const currentChapterName = pathParts.length > 1 ? pathParts[1] : pathParts[0];
+			const payload = {
+				novel_name: state.novelName,
+				chapter_name: currentChapterName,
+				row_index: rowIndex,
+				tts_text: state.novelData[rowIndex].content,
+				selected_timbres: selectedTimbres,
+				original_speaker: speaker,   // 新增：原始角色名
+				original_timbre: timbre,      // 新增：原始音色名
+				tts_model: dom.contentTableBody.querySelector(`#content-row-${rowIndex} .tts-model-select`).value
+			};
+
+            try {
+                const result = await fetchFromServer('/api/generate_choral_effect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                // 更新前端状态，以便能播放这个新生成的文件
+                state.generatedFiles[rowIndex] = result.file_name;
+                const row = dom.contentTableBody.children[rowIndex];
+                if (row) {
+                    row.querySelector('.btn-play').disabled = false;
+                    row.querySelector('.btn-effects').disabled = false;
+                }
+                setStatus(result.message, 'success');
+                // 自动播放
+                playAudio(`/output/${state.novelName}/wavs/${currentChapterName}/${result.file_name}`);
+
+            } catch (error) {
+                setStatus(`多人同声效果生成失败: ${error.message}`, 'error');
+            }
+
+            // 解绑事件，防止内存泄漏
+            dom.confirmChoralBtn.removeEventListener('click', handleConfirm);
+			dom.cancelChoralBtn.removeEventListener('click', handleCancel); // 也要解绑取消按钮
+        };
+        
+        dom.confirmChoralBtn.addEventListener('click', handleConfirm);
+
+        // 为“取消”按钮也绑定一次性事件
+        const handleCancel = () => {
+            dom.choralModal.style.display = 'none';
+            // 解绑两个事件
+            dom.confirmChoralBtn.removeEventListener('click', handleConfirm);
+            dom.cancelChoralBtn.removeEventListener('click', handleCancel);
+        };
+        dom.cancelChoralBtn.addEventListener('click', handleCancel);
+    }
+	
+    // *** 核心修改 2: 添加新的核心功能函数 ***
+    async function showCharacterDialogues(characterName) {
+        // 获取当前选中的所有章节标题
+        const selectedCheckboxes = dom.chapterListEl.querySelectorAll('.chapter-checkbox:checked');
+        const chapterTitles = Array.from(selectedCheckboxes).map(cb => cb.dataset.title);
+        
+        // 显示模态框并设置初始状态
+        dom.dialogueModal.style.display = 'flex';
+        dom.dialogueModalTitle.textContent = `角色「${characterName}」在选中章节中的相关句子`;
+        dom.dialogueModalBody.innerHTML = '<p class="placeholder-text">正在搜索原文...</p>';
+
+        if (chapterTitles.length === 0) {
+            dom.dialogueModalBody.innerHTML = '<p class="placeholder-text">请先在第一列中至少选择一个章节。</p>';
+            return;
+        }
+
+        try {
+            // 构造请求体
+            const payload = {
+                novel_name: state.novelName,
+                character_name: characterName,
+                chapter_titles: chapterTitles
+            };
+
+            // 调用新的后端API
+            const result = await fetchFromServer('/api/search_character_sentences', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            const sentences = result.sentences || [];
+
+            // 渲染最终结果
+            if (sentences.length === 0) {
+                dom.dialogueModalBody.innerHTML = `<p class="placeholder-text">在选中的 ${chapterTitles.length} 个章节中未找到包含「${characterName}」的句子。</p>`;
+            } else {
+                let html = '<ul>';
+                sentences.forEach(sentence => {
+                    // 高亮角色名
+                    const highlightedContent = sentence.content.replace(
+                        new RegExp(characterName, 'g'),
+                        `<strong style="color: var(--primary-color);">${characterName}</strong>`
+                    );
+                    html += `<li>
+                               <span class="dialogue-source">来自章节: ${sentence.source}</span>
+                               ${highlightedContent}
+                             </li>`;
+                });
+                html += '</ul>';
+
+                if (sentences.length >= 20) {
+                    html += `<p style="text-align: center; margin-top: 1rem; color: var(--text-color-secondary);">（仅显示前 ${sentences.length} 条相关句子）</p>`;
+                }
+                dom.dialogueModalBody.innerHTML = html;
+            }
+
+        } catch (error) {
+            dom.dialogueModalBody.innerHTML = `<p class="placeholder-text" style="color: var(--danger-color);">搜索时发生错误: ${error.message}</p>`;
+        }
+    }
+	
+	async function handleNovelSelection(isUploadTriggered = false) { // 增加一个默认参数
+        // **【核心修复】**
+        // 如果是由上传触发的，我们跳过 change 事件的拦截逻辑
+        if (!isUploadTriggered && state.isProgrammaticChange) {
+            state.isProgrammaticChange = false;
+            return;
+        }
+        // 如果是正常的用户点击，或者上传后手动调用，则重置旗帜
+        state.isProgrammaticChange = false;
+
+		state.novelName = dom.novelSelector.value;
+        dom.deleteNovelBtn.disabled = !state.novelName;
+        dom.manageCharactersBtn.disabled = !state.novelName;
+        dom.manageReplaceDictBtn.disabled = !state.novelName; 
+		dom.novelTxtFile.value = '';
+		
+		dom.chapterListEl.innerHTML = '<p class="placeholder-text">请先选择一本小说</p>';
+		dom.characterListEl.innerHTML = '<p class="placeholder-text">选择章节后显示</p>';
+		dom.saveConfigBtn.disabled = true;
+
+		if (state.novelName) {
+			await renderChapterList(); 
+			await loadAndApplyConfig(); 
+		} else {
+			await renderChapterList(); 
+		}
+		
+		handleChapterSelectionChange();
+	}
+    
+	// --- New Global Settings Logic ---
+
+	function renderGlobalSettingsModal() {
+		const config = state.globalConfig;
+		if (!config || !config.general || !config.models || !config.audio_export) {
+			console.error("Incomplete global config received from backend.");
+			return;
+		}
+
+		// --- Tab: General Settings ---
+		const defaultModelSelect = dom.settingsDefaultModel;
+		defaultModelSelect.innerHTML = '';
+		Object.keys(config.models).forEach(modelId => {
+			const option = document.createElement('option');
+			option.value = modelId;
+			option.textContent = config.models[modelId].display_name || modelId;
+			defaultModelSelect.appendChild(option);
+		});
+		defaultModelSelect.value = config.general.default_model;
+		
+		
+		const defaultTtsModelSelect = dom.settingsDefaultTtsModel;
+		defaultTtsModelSelect.innerHTML = '';
+		const ttsModels = config.tts_models || {};
+		for (const modelId in ttsModels) {
+			const option = document.createElement('option');
+			option.value = modelId;
+			option.textContent = ttsModels[modelId].display_name || modelId;
+			defaultTtsModelSelect.appendChild(option);
+		}
+		defaultTtsModelSelect.value = config.general.default_tts_model;
+
+		const proxy = config.general.proxy;
+		dom.settingsProxyEnabled.checked = proxy.enabled;
+		dom.proxyDetailsGroup.style.display = proxy.enabled ? 'block' : 'none';
+		dom.settingsProxyProtocol.value = proxy.protocol;
+		dom.settingsProxyAddress.value = proxy.address;
+		dom.settingsProxyPort.value = proxy.port;
+
+		// --- Tab: Model Settings ---
+		const llmForm = dom.llmSettingsForm;
+		llmForm.innerHTML = '';
+		for (const modelId in config.models) {
+			const model = config.models[modelId];
+			const fieldset = document.createElement('fieldset');
+			fieldset.style = "border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem; margin-bottom: 1rem;";
+			fieldset.innerHTML = `
+				<legend style="font-weight: 500;">${model.display_name || modelId}</legend>
+				<div class="input-group">
+					<label for="modelname-${modelId}">Model Name</label>
+					<input type="text" id="modelname-${modelId}" data-model-id="${modelId}" data-key="model_name" value="${model.model_name || ''}" placeholder="e.g., gemini-2.5-flash">
+				</div>
+				<div class="input-group">
+					<label for="apikey-${modelId}">API Key</label>
+					<input type="password" id="apikey-${modelId}" data-model-id="${modelId}" data-key="api_key" value="${model.api_key || ''}" placeholder="请输入API Key">
+				</div>
+				<div class="input-group">
+					<label for="maxchars-${modelId}">最大字符数 (用于分块)</label>
+					<input type="number" id="maxchars-${modelId}" data-model-id="${modelId}" data-key="max_chars" value="${model.max_chars || 1000}">
+				</div>
+				<div class="config-group inline-group">
+					<label for="useproxy-${modelId}">使用代理服务器</label>
+					<input type="checkbox" id="useproxy-${modelId}" data-model-id="${modelId}" data-key="use_proxy" ${model.use_proxy ? 'checked' : ''} style="width: auto; height: auto;">
+				</div>
+			`;
+			llmForm.appendChild(fieldset);
+		}
+
+		// --- 渲染 Tab: TTS 模型配置 ---
+        const ttsForm = dom.ttsSettingsForm;
+        ttsForm.innerHTML = '';
+        // 直接使用 config.tts_models，避免变量重名
+        for (const modelId in config.tts_models) { 
+            const model = config.tts_models[modelId];
+            const fieldset = document.createElement('fieldset');
+            fieldset.style = "border: 1px solid var(--border-color); border-radius: 4px; padding: 1rem; margin-bottom: 1rem;";
+            fieldset.innerHTML = `
+                <legend style="font-weight: 500;">${modelId}</legend>
+                <div class="input-group">
+                    <label for="tts-displayname-${modelId}">显示名称</label>
+                    <input type="text" id="tts-displayname-${modelId}" data-model-id="${modelId}" data-key="display_name" value="${model.display_name || ''}">
+                </div>
+                <div class="input-group">
+                    <label for="tts-endpoint-${modelId}">服务地址 (Endpoint)</label>
+                    <input type="text" id="tts-endpoint-${modelId}" data-model-id="${modelId}" data-key="endpoint" value="${model.endpoint || ''}" placeholder="http://127.0.0.1:5010/api/tts">
+                </div>
+            `;
+            ttsForm.appendChild(fieldset);
+        }
+		
+		// --- Tab: Audio Export ---
+		dom.exportFormat.value = config.audio_export.format;
+		updateQualityOptions(); // This helper function is still useful
+		dom.exportQuality.value = config.audio_export.quality;
+	}
+
+	async function saveAllSettings() {
+		const newConfig = JSON.parse(JSON.stringify(state.globalConfig));
+
+		// General settings
+		newConfig.general.default_model = dom.settingsDefaultModel.value;
+		newConfig.general.default_tts_model = dom.settingsDefaultTtsModel.value;
+		newConfig.general.proxy.enabled = dom.settingsProxyEnabled.checked;
+		newConfig.general.proxy.protocol = dom.settingsProxyProtocol.value;
+		newConfig.general.proxy.address = dom.settingsProxyAddress.value;
+		newConfig.general.proxy.port = dom.settingsProxyPort.value;
+
+		// Model settings
+		dom.llmSettingsForm.querySelectorAll('input').forEach(input => {
+			const modelId = input.dataset.modelId;
+			const key = input.dataset.key;
+			if (!modelId || !key) return;
+
+			let value;
+			if (input.type === 'checkbox') {
+				value = input.checked;
+			} else if (input.type === 'number') {
+				value = parseInt(input.value, 10) || 0;
+			} else {
+				value = input.value;
+			}
+			newConfig.models[modelId][key] = value;
+		});
+		
+		// TTS Model settings
+		if (!newConfig.tts_models) newConfig.tts_models = {};
+		dom.ttsSettingsForm.querySelectorAll('input').forEach(input => {
+			const modelId = input.dataset.modelId;
+			const key = input.dataset.key;
+			if (!modelId || !key) return;
+
+			// 确保 modelId 存在于对象中
+			if (!newConfig.tts_models[modelId]) newConfig.tts_models[modelId] = {};
+			
+			newConfig.tts_models[modelId][key] = input.value;
+		});
+
+		// Audio export settings
+		newConfig.audio_export.format = dom.exportFormat.value;
+		newConfig.audio_export.quality = dom.exportQuality.value;
+
+		try {
+			setStatus('正在保存所有设置...', 'info');
+			const result = await fetchFromServer('/api/update_llm_config', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ config: newConfig })
+			});
+			state.globalConfig = newConfig;
+			setStatus(result.message, 'success');
+			return true;
+		} catch (error) {
+			setStatus(`保存设置失败: ${error.message}`, 'error');
+			return false;
+		}
+	}
+
+	dom.settingsBtn.addEventListener('click', () => {
+		renderGlobalSettingsModal();
+		dom.globalSettingsModal.style.display = 'flex';
+	});
+
+	// 新增这个事件监听器，用于根据“启用代理”复选框显示/隐藏详细信息
+	dom.settingsProxyEnabled.addEventListener('change', (e) => {
+		dom.proxyDetailsGroup.style.display = e.target.checked ? 'block' : 'none';
+	});
+
+	dom.globalSettingsCloseBtn.addEventListener('click', () => {
+		dom.globalSettingsModal.style.display = 'none';
+	});
+
+	dom.globalSettingsSaveBtn.addEventListener('click', async () => {
+        const success = await saveAllSettings();
+        if (success) {
+            dom.globalSettingsModal.style.display = 'none';
+            // Also update the main LLM selector to reflect the new default
+            if (state.globalConfig.general) { // Add safety check
+                
+                dom.llmModelSelector.value = state.globalConfig.general.default_model;
+                // 同时，也应该更新 state.selectedLLM 的值，以保持状态一致
+                state.selectedLLM = state.globalConfig.general.default_model;
+            }
+			if (dom.contentTable.style.display === 'table') {
+				renderContentTable();
+				checkAllPlayableFiles();
+			}
+			
+			const elevenlabsConfig = state.globalConfig.elevenlabs; // elevenlabs 是顶级键
+			const hasElevenlabsKey = elevenlabsConfig && elevenlabsConfig.api_key && elevenlabsConfig.api_key.trim() !== '';
+
+            if (hasElevenlabsKey) {
+                dom.transcribeBtn.style.display = 'inline-flex'; // 如果有 Key，则显示按钮
+                dom.transcribeBtn.title = ''; 
+                // 此时，transcribeBtn 应该变为启用
+                dom.transcribeBtn.disabled = false;
+            } else {
+                dom.transcribeBtn.style.display = 'none'; // 没有 Key，则隐藏按钮
+            }
+        }
+    });
+	
+	dom.contentTableBody.addEventListener('change', (e) => {
+		const row = e.target.closest('tr');
+		if (!row) return;
+		const rowIndex = parseInt(row.id.replace('content-row-', ''), 10);
+		if (isNaN(rowIndex)) return;
+		const item = state.novelData[rowIndex];
+		if (!item) return;
+
+		let changed = false;
+
+		// 1. TTS模型选择变化 (逻辑不变)
+		if (e.target.matches('.tts-model-select')) {
+			const selectedTtsModel = e.target.value;
+			const isCosyVoice = selectedTtsModel.includes('cosyvoice');
+			const modeSelect = row.querySelector('.mode-select');
+			if (modeSelect) {
+				modeSelect.disabled = !isCosyVoice;
+				if (!isCosyVoice) {
+					const instructInput = row.querySelector('.instruct-input');
+					if (instructInput) instructInput.style.display = 'none';
+					modeSelect.value = 'zero_shot';
+					if (item.inference_mode !== 'zero_shot') {
+						item.inference_mode = 'zero_shot';
+						changed = true;
+					}
+				}
+			}
+		}
+
+		// 2. 推理模式 (mode-select) 变化
+		if (e.target.matches('.mode-select')) {
+			const instructInput = row.querySelector('.instruct-input');
+			if (instructInput) {
+				const newMode = e.target.value;
+				instructInput.style.display = !e.target.disabled && newMode === 'instruct' ? 'block' : 'none';
+				// 核心修复：将用户的选择保存到 state.novelData
+				if (item.inference_mode !== newMode) {
+					item.inference_mode = newMode;
+					changed = true;
+				}
+			}
+		}
+
+		// 3. 临时音色 (timbre-override-select) 变化
+		if (e.target.matches('.timbre-override-select')) {
+			const newTimbre = e.target.value;
+			item.timbre_override = newTimbre;
+			setStatus(`第 ${rowIndex + 1} 行的临时音色已设置为: ${newTimbre}`, 'info');
+			const generateBtn = row.querySelector('.btn-generate');
+			if (generateBtn) generateBtn.disabled = !newTimbre;
+			changed = true;
+		}
+		
+		// 如果有任何变化，则激活保存按钮
+		if (changed) {
+			markChapterAsDirty();
+		}
+	});
+
+	// 在上面那个函数的正下方，【添加】这个新的 input 事件监听器
+	dom.contentTableBody.addEventListener('input', (e) => {
+		if (e.target.matches('.instruct-input')) {
+			const row = e.target.closest('tr');
+			if (!row) return;
+			const rowIndex = parseInt(row.id.replace('content-row-', ''), 10);
+			if (isNaN(rowIndex)) return;
+			const item = state.novelData[rowIndex];
+			if (!item) return;
+			
+			// 核心修复：将用户输入的指令文本实时保存到 state.novelData
+			item.instruct_text = e.target.value;
+			markChapterAsDirty();
+		}
+	});
+    // *** 核心修改 6: 添加标签页切换逻辑 ***
+    const tabsContainer = document.querySelector('.settings-tabs');
+    const contentPanels = document.querySelectorAll('.tab-content');
+    
+    tabsContainer.addEventListener('click', (e) => {
+        if (e.target.matches('.tab-link')) {
+            const tabId = e.target.dataset.tab;
+
+            // 移除所有标签的 active 类
+            tabsContainer.querySelectorAll('.tab-link').forEach(tab => tab.classList.remove('active'));
+            // 隐藏所有内容面板
+            contentPanels.forEach(panel => panel.classList.remove('active'));
+
+            // 为被点击的标签和对应的内容面板添加 active 类
+            e.target.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+    });
+		
+    // 1. 点击主界面上的删除图标按钮
+    dom.deleteNovelBtn.addEventListener('click', () => {
+        const novelName = state.novelName;
+        if (!novelName) {
+            alert('请先选择一个要删除的小说项目。');
+            return;
+        }
+
+        // 打开确认模态框
+        dom.novelToDeleteName.textContent = `「${novelName}」`;
+        dom.deleteConfirmInput.value = ''; // 清空输入框
+        dom.confirmDeleteBtn.disabled = true; // 初始禁用确认按钮
+        dom.deleteNovelModal.style.display = 'flex';
+        dom.deleteConfirmInput.focus();
+    });
+
+    // 2. 在模态框的输入框中输入时，进行验证
+    dom.deleteConfirmInput.addEventListener('input', () => {
+        // 只有当用户输入的内容完全等于 "删除" 时，才激活确认按钮
+        if (dom.deleteConfirmInput.value.trim() === '删除') {
+            dom.confirmDeleteBtn.disabled = false;
+        } else {
+            dom.confirmDeleteBtn.disabled = true;
+        }
+    });
+
+    // 3. 点击模态框中的“取消”按钮
+    dom.cancelDeleteBtn.addEventListener('click', () => {
+        dom.deleteNovelModal.style.display = 'none';
+    });
+    // 点击背景关闭
+    dom.deleteNovelModal.addEventListener('click', (e) => {
+        if (e.target === dom.deleteNovelModal) {
+            dom.deleteNovelModal.style.display = 'none';
+        }
+    });
+
+    // 4. 点击最终的“确认删除”按钮
+    dom.confirmDeleteBtn.addEventListener('click', async () => {
+        const novelName = state.novelName;
+        if (!novelName) return;
+
+        // 进入处理中状态
+        dom.confirmDeleteBtn.disabled = true;
+        dom.confirmDeleteBtn.textContent = '删除中...';
+        setStatus(`正在永久删除小说项目: ${novelName}...`, 'info');
+
+        try {
+            const result = await fetchFromServer(`/api/delete_novel?novel_name=${encodeURIComponent(novelName)}`, {
+                method: 'DELETE',
+            });
+
+            setStatus(result.message, 'success');
+            dom.deleteNovelModal.style.display = 'none';
+
+            // 关键：刷新小说列表
+            await loadNovels();
+            // loadNovels 后会自动填充下拉框，但我们需要手动触发一次选择逻辑来清空右侧面板
+            handleNovelSelection();
+
+        } catch (error) {
+            setStatus(`删除失败: ${error.message}`, 'error');
+            alert(`删除失败: ${error.message}`); // 同时用alert给出强提示
+        } finally {
+            // 恢复按钮状态
+            dom.confirmDeleteBtn.textContent = '确认删除';
+            // 此时确认按钮应该保持禁用，因为输入框是空的
+            dom.confirmDeleteBtn.disabled = true; 
+        }
+    });
+	
+    dom.exportFormat.addEventListener('change', updateQualityOptions);
+    dom.novelSelector.addEventListener('change', () => {
+        handleNovelSelection(); // 直接调用，不再需要其他逻辑
+    });
+    dom.uploadTxtLabelBtn.addEventListener('click', () => {
+        dom.novelTxtFile.click(); // 模拟点击隐藏的文件输入框
+    });
+    dom.novelTxtFile.addEventListener('change', e => { if (e.target.files[0]) handleTxtFileUpload(e.target.files[0]); });
+    dom.llmModelSelector.addEventListener('change', () => {
+        state.selectedLLM = dom.llmModelSelector.value;
+        console.log(`LLM for processing changed to: ${state.selectedLLM}`);
+    });
+    
+	// click 事件现在只用于 Shift 多选
+    dom.chapterListEl.addEventListener('click', e => {
+        const checkbox = e.target.closest('input.chapter-checkbox');
+        if (!checkbox) return; // 如果没点到复选框区域，则忽略
+
+        const visibleCheckboxes = Array.from(dom.chapterListEl.querySelectorAll('.chapter-checkbox'));
+        const currentIndex = visibleCheckboxes.indexOf(checkbox);
+
+        // Shift 多选逻辑
+        if (e.shiftKey && state.lastCheckedIndex > -1 && state.lastCheckedIndex !== currentIndex) {
+            
+            // 【核心修复】我们不再使用 preventDefault()。
+            // 让浏览器先完成它自己的点击行为。
+
+            // a. 确定范围
+            const start = Math.min(currentIndex, state.lastCheckedIndex);
+            const end = Math.max(currentIndex, state.lastCheckedIndex);
+            
+            // b. 确定目标状态，永远以第一次点击的“锚点”元素为准。
+            const anchorCheckbox = visibleCheckboxes[state.lastCheckedIndex];
+            const targetState = anchorCheckbox.checked;
+
+            // c. 批量修正状态
+            //    这个循环会把从起点到终点的所有元素（包括终点本身）的状态
+            //    都强制设置成和锚点元素一样。
+            for (let i = start; i <= end; i++) {
+                visibleCheckboxes[i].checked = targetState;
+            }
+        }
+
+        // 更新 lastCheckedIndex，为下一次 Shift 点击做准备
+        state.lastCheckedIndex = currentIndex;
+        
+        // 在所有操作完成后，调用更新函数
+        setTimeout(() => {
+            updateGlobalButtons();
+            handleChapterSelectionChange(); // <--- 确保这一行存在！
+        }, 0);
+    });
+
+
+    dom.selectAllChaptersBtn.addEventListener('click', () => {
+        dom.chapterListEl.querySelectorAll('.chapter-checkbox').forEach(cb => cb.checked = true);
+        updateGlobalButtons();
+		handleChapterSelectionChange();
+    });
+    dom.selectNoneChaptersBtn.addEventListener('click', () => {
+        dom.chapterListEl.querySelectorAll('.chapter-checkbox').forEach(cb => cb.checked = false);
+        updateGlobalButtons();
+		handleChapterSelectionChange();
+    });
+
+    dom.processTxtBtn.addEventListener('click', processTxtChapters);
+    dom.processAllBtn.addEventListener('click', processAllAndSplice);
+    dom.saveConfigBtn.addEventListener('click', saveConfig);
+
+    // *** 核心修改 4: 为批量下载按钮添加事件监听器 ***
+    dom.downloadSpliceBtn.addEventListener('click', async () => {
+        const selectedCheckboxes = dom.chapterListEl.querySelectorAll('.chapter-checkbox:checked');
+        const filePathsToDownload = [];
+        
+        if (state.novelName && state.allNovelsData[state.novelName]) {
+            const novelChapters = state.allNovelsData[state.novelName].chapters;
+            for (const checkbox of selectedCheckboxes) {
+                const chapterTitle = checkbox.dataset.title;
+                const chapterData = novelChapters.find(c => c.title === chapterTitle);
+                
+                // 只添加已拼接的章节
+                if (chapterData && chapterData.spliced) {
+                    const novel = state.novelName;
+                    const chapter = sanitizeTitleForFilename(chapterTitle);
+                    const format = state.globalConfig.audio_export?.format || 'mp3';
+					filePathsToDownload.push(`${novel}/${chapter}.${format}`);
+                }
+            }
+        }
+
+        if (filePathsToDownload.length === 0) {
+            alert('没有找到可以下载的已拼接文件。');
+            return;
+        }
+
+        setStatus(`正在打包 ${filePathsToDownload.length} 个文件...`, 'info');
+        dom.downloadSpliceBtn.disabled = true;
+        dom.downloadSpliceBtn.textContent = '打包中...';
+
+        try {
+            const response = await fetch('/api/download_spliced_chapters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_paths: filePathsToDownload })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '打包失败。');
+            }
+
+            // 将响应体转换为 Blob
+            const blob = await response.blob();
+            
+            // 从响应头中获取推荐的文件名
+            const contentDisposition = response.headers.get('content-disposition');
+            let filename = 'chapters.zip'; // 默认文件名
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (filenameMatch.length > 1) {
+                    filename = filenameMatch[1];
+                }
+            }
+
+            // 创建一个临时的 a 标签来触发下载
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // 释放 Object URL
+            URL.revokeObjectURL(link.href);
+            setStatus('文件打包下载成功！', 'success');
+
+        } catch (error) {
+            setStatus(`下载失败: ${error.message}`, 'error');
+        } finally {
+            dom.downloadSpliceBtn.disabled = false;
+            dom.downloadSpliceBtn.textContent = '下载声音';
+        }
+    });
+
+	
+	dom.chapterPlayStopBtn.addEventListener('click', toggleChapterAudio);
+
+    dom.characterListEl.addEventListener('click', e => {
+        const li = e.target.closest('li.selectable');
+        if (!li) return; // 如果没点到行，就什么都不做
+
+        // --- 1. 角色选择逻辑 (保持不变) ---
+        state.selectedCharacter = li.dataset.characterName;
+        // 移除所有旧的选中样式
+        document.querySelectorAll('#character-list li.selected').forEach(el => el.classList.remove('selected'));
+        // 为当前行添加选中样式
+        li.classList.add('selected');
+        setStatus(`已选中角色: ${state.selectedCharacter}`, 'info');
+
+        // --- 2. 试听和简介按钮逻辑 (保持不变) ---
+		if (e.target.matches('.audio-player-btn')) {
+			const timbreName = state.characterMapping[e.target.closest('li').dataset.characterName];
+			if(timbreName) toggleSimpleAudio(e.target, `/wav/${timbreName}/1.wav`);
+		}
+		
+        if (e.target.matches('.btn-profile')) {
+            showProfileModal(e.target.dataset.characterName);
+        }
+
+        // *** 核心修改 2: 实现高亮和滚动逻辑 ***
+
+        // a. 检查编辑器是否可见
+        if (dom.editorView.style.display !== 'block' || state.novelData.length === 0) {
+            return; // 如果编辑器不可见或没有内容，则不执行后续操作
+        }
+
+        const characterToHighlight = state.selectedCharacter;
+        const tableRows = dom.contentTableBody.querySelectorAll('tr');
+        let firstHighlightedRow = null;
+
+        // b. 遍历所有行，进行高亮处理
+        tableRows.forEach((row, index) => {
+            // 从 state.novelData 获取该行对应的 speaker，这比从DOM读取更可靠
+            const speaker = state.novelData[index] ? state.novelData[index].speaker : '';
+            
+            if (speaker === characterToHighlight) {
+                row.classList.add('highlighted-row');
+                // 记录第一个被高亮的行
+                if (!firstHighlightedRow) {
+                    firstHighlightedRow = row;
+                }
+            } else {
+                // 移除其他行可能存在的高亮
+                row.classList.remove('highlighted-row');
+            }
+        });
+
+        // c. 如果找到了匹配的行，则滚动到第一个匹配行
+        if (firstHighlightedRow) {
+            firstHighlightedRow.scrollIntoView({
+                behavior: 'smooth', // 平滑滚动
+                block: 'center'     // 将其滚动到视口的中央
+            });
+            setStatus(`已高亮角色「${characterToHighlight}」的所有对话。`, 'info');
+        } else {
+             setStatus(`当前章节内容中未找到角色「${characterToHighlight}」的对话。`, 'info');
+        }
+    });
+    dom.characterListEl.addEventListener('dblclick', e => {
+        const li = e.target.closest('li.character-row');
+        if (li) {
+            const characterName = li.dataset.characterName;
+            showCharacterDialogues(characterName);
+        }
+    });
+	
+	
+	// 6. 模态播放器内部的事件监听器 
+	dom.playerPlayPauseBtn.addEventListener('click', () => {
+		if (state.globalAudioPlayer) {
+			if (state.globalAudioPlayer.paused) {
+				state.globalAudioPlayer.play();
+			} else {
+				state.globalAudioPlayer.pause();
+			}
+		}
+	});
+
+	dom.playerProgressBar.addEventListener('input', () => {
+		if (state.globalAudioPlayer) {
+			state.globalAudioPlayer.currentTime = dom.playerProgressBar.value;
+		}
+	});
+
+	dom.playerModalCloseBtn.addEventListener('click', stopAllAudio);
+	dom.audioPlayerModal.addEventListener('click', (e) => {
+		if (e.target === dom.audioPlayerModal) {
+			stopAllAudio();
+		}
+	});
+
+    // *** 核心修改 4: 为新模态框添加关闭事件 ***
+    dom.dialogueModalCloseBtn.addEventListener('click', () => {
+        dom.dialogueModal.style.display = 'none';
+    });
+    dom.dialogueModal.addEventListener('click', (e) => {
+        if (e.target === dom.dialogueModal) {
+            dom.dialogueModal.style.display = 'none';
+        }
+    });
+
+    dom.timbreFile.addEventListener('change', e => { if (e.target.files[0]) showTimbreUploadModal(e.target.files[0]); e.target.value = ''; });
+    dom.confirmUploadBtn.addEventListener('click', handleTimbreUpload);
+    dom.cancelUploadBtn.addEventListener('click', hideTimbreUploadModal);
+    
+    dom.contentTableBody.addEventListener('click', async (event) => { // 将函数标记为 async
+        const row = event.target.closest('tr');
+        if (!row) return;
+
+        // 获取当前行的索引和生成按钮
+        const index = Array.from(dom.contentTableBody.children).indexOf(row);
+        const generateBtn = row.querySelector('.btn-generate');
+
+        // --- “生成”按钮的逻辑 ---
+        if (event.target === generateBtn) {
+            // *** 核心修改 1: 立即禁用按钮并更新UI ***
+            generateBtn.disabled = true;
+            generateBtn.textContent = '生成中...';
+            setStatus(`正在为第 ${index + 1} 行生成音频...`, 'info');
+
+            const pathParts = state.selectedChapterPaths[0].replace('.json', '').split(/[/\\]/);
+            const currentChapterName = pathParts.length > 1 ? pathParts[1] : pathParts[0];
+            const speaker = state.novelData[index].speaker;
+			const timbreSelect = row.querySelector('.timbre-override-select');
+			const timbre = timbreSelect ? timbreSelect.value : state.characterMapping[speaker];
+            
+            if (!timbre) { 
+                setStatus(`错误: 角色'${speaker}'未分配音色`, 'error');
+                // 恢复按钮状态
+                generateBtn.disabled = false;
+                generateBtn.textContent = '生成音频';
+                return; 
+            }
+            
+            const payload = {
+                novel_name: state.novelName, chapter_name: currentChapterName, row_index: index, 
+                speaker: speaker, timbre: timbre, tts_text: state.novelData[index].content,
+                inference_mode: row.querySelector('.mode-select').value, 
+                instruct_text: row.querySelector('.instruct-input').value.trim(),
+				tts_model: row.querySelector('.tts-model-select').value
+            };
+
+            try {
+                const details = await loadTimbreDetails(timbre);
+                payload.prompt_audio = details.promptAudio;
+                payload.prompt_text = details.promptText;
+
+                const fileName = await generateSpeech(payload); // generateSpeech 现在内部处理重试
+                
+                if (fileName) {
+                    state.generatedFiles[index] = fileName;
+                    const playBtn = row.querySelector('.btn-play');
+                    if (playBtn) {
+                        playBtn.disabled = false;
+                        playBtn.classList.add('playable');
+					}
+                    const effectsBtn = row.querySelector('.btn-effects');
+                    if (effectsBtn) effectsBtn.disabled = false;
+                    setStatus(`第 ${index + 1} 行音频生成成功！`, 'success');
+                } else {
+                    // generateSpeech 返回 null 表示最终失败
+                    setStatus(`第 ${index + 1} 行音频生成失败，请检查后端日志。`, 'error');
+                }
+            } catch (err) {
+                // 这个 catch 主要捕获 loadTimbreDetails 的错误
+                setStatus(`生成失败: ${err.message}`, 'error');
+            } finally {
+                // *** 核心修改 2: 无论成功或失败，都恢复按钮状态 ***
+                generateBtn.disabled = false;
+                generateBtn.textContent = '生成音频';
+            }
+        }
+
+        // --- “播放”按钮的逻辑 ---
+        if (event.target.matches('.btn-play')) { 
+            const row = event.target.closest('tr');
+            const index = Array.from(dom.contentTableBody.children).indexOf(row);
+
+            if (state.generatedFiles[index] && state.selectedChapterPaths.length === 1) {
+                
+                // 1. 从 state 中获取当前章节的原始路径，例如 "小说名/章节名.json"
+                const fullChapterPath = state.selectedChapterPaths[0];
+                
+                // 2. 解析出原始的章节标题
+                //    - 去掉 ".json" 后缀
+                //    - 分割路径并取最后一部分
+                const pathParts = fullChapterPath.replace(/\.json$/, '').split(/[/\\]/);
+                const originalChapterTitle = pathParts[pathParts.length - 1];
+
+                // 3. 使用 sanitizeTitleForFilename 函数对原始标题进行安全处理，
+                //    使其与后端生成文件夹时使用的名称完全一致。
+                const safeChapterName = sanitizeTitleForFilename(originalChapterTitle);
+
+                // 4. 拼接成最终的、正确的URL
+                const audioPath = `/output/${state.novelName}/wavs/${safeChapterName}/${state.generatedFiles[index]}`;
+
+                // 5. 调用播放函数
+                toggleSimpleAudio(event.target, audioPath);
+            }
+        }
+				
+        // --- “特效”按钮的逻辑 ---
+		if (event.target.matches('.effects-menu button')) {
+			const effectBtn = event.target;
+            const mainEffectsBtn = effectBtn.closest('.popover-container').querySelector('.btn-effects');
+
+            // 如果点击的是“多人同声”，则显示新模态框
+            if (effectBtn.dataset.effect === 'choral') {
+                const index = Array.from(dom.contentTableBody.children).indexOf(row);
+                const fileName = state.generatedFiles[index];
+                if (!fileName) {
+                    setStatus('错误：必须先生成基础音频才能应用特效。', 'error');
+                    return;
+                }
+                
+                // 打开“多人同声”模态框
+                openChoralModal(index);
+                mainEffectsBtn.blur(); // 关闭特效菜单
+                return; // 结束本次点击处理
+            }
+			
+			const effectType = effectBtn.dataset.effect;
+			const index = Array.from(dom.contentTableBody.children).indexOf(row);
+			const fileName = state.generatedFiles[index];
+			if (!fileName) {
+				setStatus('错误：必须先生成音频才能应用特效。', 'error');
+				return;
+			}
+
+			const pathParts = state.selectedChapterPaths[0].replace('.json', '').split(/[/\\]/);
+			const currentChapterName = pathParts.length > 1 ? pathParts[1] : pathParts[0];
+			
+			const payload = {
+				novel_name: state.novelName,
+				chapter_name: currentChapterName,
+				file_name: fileName,
+				effect_type: effectType
+			};
+
+            // *** 核心修改：添加UI反馈和异步处理 ***
+            const playBtnForEffect = row.querySelector('.btn-play');
+            const originalEffectBtnText = effectBtn.innerHTML;
+            effectBtn.innerHTML = `<span>⏳</span> 处理中...`;
+            effectBtn.disabled = true;
+            mainEffectsBtn.disabled = true; // 禁用主特效按钮防止再次打开菜单
+			setStatus(`正在应用 "${effectBtn.textContent.trim()}" 特效...`, 'info');
+            
+            // 使用 async/await 方式处理请求
+			(async () => {
+                try {
+                    const result = await fetchFromServer('/api/apply_effect', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    setStatus(result.message, 'success');
+                    // 特效应用成功后，自动播放结果
+                    const audioPath = `/output/${state.novelName}/wavs/${currentChapterName}/${fileName}`;
+                    if (playBtnForEffect) {
+                        toggleSimpleAudio(playBtnForEffect, audioPath);
+                    }
+                } catch (err) {
+                    setStatus(`特效应用失败: ${err.message}`, 'error');
+                } finally {
+                    // 恢复按钮状态
+                    effectBtn.innerHTML = originalEffectBtnText;
+                    effectBtn.disabled = false;
+                    mainEffectsBtn.disabled = false;
+                    // 关闭菜单 (通过让主按钮失去焦点)
+                    mainEffectsBtn.blur();
+                }
+            })();
+		}
+		
+        if (event.target.matches('.btn-delete-row')) {
+            const index = parseInt(event.target.dataset.index, 10);
+            if (confirm(`您确定要删除第 ${index + 1} 行吗？`)) {
+                state.novelData.splice(index, 1);
+                renderContentTable();
+                markChapterAsDirty();
+            }
+        }
+        // --- “插入行”按钮的逻辑 ---
+        if (event.target.matches('.btn-insert-row')) {
+            const index = parseInt(event.target.dataset.index, 10);
+            const newRow = { speaker: "旁白", content: "（新插入的行）", tone: "neutral", intensity: 5, delay: 500 };
+            state.novelData.splice(index + 1, 0, newRow);
+            renderContentTable();
+            markChapterAsDirty();
+        }
+    });
+
+
+	// New listener for adding a row at the end
+	dom.addRowStartBtn.addEventListener('click', () => {
+		const newRow = { speaker: "旁白", content: "（新插入的行）", tone: "neutral", intensity: 5, delay: 500 };
+		state.novelData.unshift(newRow);
+		renderContentTable();
+		markChapterAsDirty();
+	});
+
+	// Modify the existing blur listener to also enable the save button
+	dom.contentTableBody.addEventListener('blur', (event) => {
+		if (event.target.matches('.content-cell')) {
+			const row = event.target.closest('tr');
+			const index = Array.from(dom.contentTableBody.children).indexOf(row);
+			const newContent = event.target.textContent.trim();
+			if (state.novelData[index] && state.novelData[index].content !== newContent) {
+				state.novelData[index].content = newContent;
+				setStatus(`第${index+1}行: 内容已更新`, 'info');
+				markChapterAsDirty(); // Enable save button on content change
+			}
+		}
+	}, true);
+
+	// New listener for the save button
+	dom.saveChapterBtn.addEventListener('click', async () => {
+		if (state.selectedChapterPaths.length !== 1) return;
+		const filepath = state.selectedChapterPaths[0];
+		setStatus('正在保存章节修改...', 'info');
+		try {
+			const payload = { filepath: filepath, content: state.novelData };
+			const result = await fetchFromServer('/api/update_chapter_content', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			setStatus(result.message, 'success');
+			dom.saveChapterBtn.disabled = true; // Disable after successful save
+		} catch (error) {
+			setStatus(`保存失败: ${error.message}`, 'error');
+		}
+	});
+    dom.profileModalCloseBtn.addEventListener('click', () => dom.profileModal.style.display = 'none');
+    dom.profileModal.addEventListener('click', (e) => { if (e.target === dom.profileModal) dom.profileModal.style.display = 'none'; });
+	
+    dom.manageReplaceDictBtn.addEventListener('click', async () => {
+        if (!state.novelName) {
+            alert('请先选择一个小说项目。');
+            return;
+        }
+        dom.replaceDictNovelName.textContent = state.novelName;
+        dom.replaceDictModal.style.display = 'flex';
+        await loadReplaceDict();
+    });
+
+    dom.closeReplaceDictBtn.addEventListener('click', () => {
+        dom.replaceDictModal.style.display = 'none';
+    });
+    // 点击背景关闭
+    dom.replaceDictModal.addEventListener('click', (e) => {
+        if (e.target === dom.replaceDictModal) {
+            dom.replaceDictModal.style.display = 'none';
+        }
+    });
+
+    dom.addReplaceRuleBtn.addEventListener('click', async () => {
+        const original = dom.newOriginalWord.value.trim();
+        const replacement = dom.newReplacementWord.value.trim();
+        const description = dom.newDescription.value.trim();
+
+        if (!original || !replacement) {
+            alert('原词和替换词不能为空。');
+            return;
+        }
+
+        state.replaceDict.push({ original_word: original, replacement_word: replacement, description: description });
+        await saveReplaceDict();
+        dom.newOriginalWord.value = '';
+        dom.newReplacementWord.value = '';
+        dom.newDescription.value = '';
+        renderReplaceRules();
+    });
+
+    dom.replaceRuleSearchInput.addEventListener('input', () => {
+        renderReplaceRules(dom.replaceRuleSearchInput.value);
+    });
+
+    dom.replaceRulesList.addEventListener('click', async (e) => {
+        const target = e.target;
+        if (target.matches('.btn-delete-rule')) {
+            const li = target.closest('li');
+            const originalWordToDelete = li.dataset.originalWord;
+            const replacementWordToDelete = li.dataset.replacementWord;
+
+            if (confirm(`您确定要删除规则「${originalWordToDelete} → ${replacementWordToDelete}」吗？`)) {
+                //  查找要删除规则的真实索引
+                const indexToDelete = state.replaceDict.findIndex(rule => 
+                    rule.original_word === originalWordToDelete && 
+                    rule.replacement_word === replacementWordToDelete
+                );
+
+                if (indexToDelete !== -1) {
+                    state.replaceDict.splice(indexToDelete, 1); 
+                    await saveReplaceDict();
+                    renderReplaceRules(dom.replaceRuleSearchInput.value); // 刷新时保留搜索状态
+                    setStatus(`已删除规则: ${originalWordToDelete} → ${replacementWordToDelete}`, 'success');
+                } else {
+                    setStatus('错误：未找到要删除的规则。', 'error');
+                }
+            }
+        }
+    });
+	
+	dom.filterBtn.addEventListener('click', () => {
+		dom.filterModal.style.display = 'flex';
+		// Populate modal with current filter state
+		document.querySelector(`input[name="filterStatus"][value="${state.filter.status}"]`).checked = true;
+		dom.rangeStartInput.value = state.filter.start || '';
+		dom.rangeEndInput.value = state.filter.end || '';
+	});
+
+	function closeFilterModal() {
+		dom.filterModal.style.display = 'none';
+	}
+
+	dom.applyFilterBtn.addEventListener('click', () => {
+		state.filter.status = document.querySelector('input[name="filterStatus"]:checked').value;
+		state.filter.start = dom.rangeStartInput.value;
+		state.filter.end = dom.rangeEndInput.value;
+		renderChapterList(); // Re-render the list with new filters
+		closeFilterModal();
+	});
+
+	dom.clearFilterBtn.addEventListener('click', () => {
+		state.filter.status = 'all';
+		state.filter.start = null;
+		state.filter.end = null;
+		renderChapterList(); // Re-render the full list
+		closeFilterModal();
+	});
+
+	// Also add closing handlers for the modal overlay
+	dom.filterModal.addEventListener('click', (e) => {
+		if (e.target === dom.filterModal) {
+			closeFilterModal();
+		}
+	});
+	
+	dom.transcribeBtn.addEventListener('click', async () => {
+		if (!state.fileToUpload) {
+			alert("请先选择一个音频文件。");
+			return;
+		}
+
+		// --- UI 反馈 ---
+		const originalBtnText = dom.transcribeBtn.innerHTML;
+		dom.transcribeBtn.innerHTML = '识别中...';
+		dom.transcribeBtn.disabled = true;
+		setStatus('正在自动识别文本...', 'info');
+
+		const formData = new FormData();
+		formData.append('file', state.fileToUpload);
+
+		try {
+			const result = await fetchFromServer('/api/stt_elevenlabs', {
+				method: 'POST',
+				body: formData
+			});
+
+			if (result.status === 'success') {
+				dom.newTimbreTextInput.value = result.text;
+				setStatus('文本识别成功！', 'success');
+			} else {
+				// 如果后端返回了已知的错误信息
+				throw new Error(result.message || '识别失败，未知错误');
+			}
+
+		} catch (error) {
+			setStatus(`文本识别失败: ${error.message}`, 'error');
+			alert(`文本识别失败: ${error.message}`);
+		} finally {
+			// --- 恢复 UI ---
+			dom.transcribeBtn.innerHTML = originalBtnText;
+			dom.transcribeBtn.disabled = false;
+		}
+	});
+	
+    dom.previewUploadBtn.addEventListener('click', () => {
+        if (state.fileToUpload) {
+            // 调用新的、专门的函数
+            toggleLocalBlobAudio(dom.previewUploadBtn, state.fileToUpload);
+        }
+    });
+	
+    async function loadReplaceDict() {
+        if (!state.novelName) {
+            dom.replaceRulesList.innerHTML = '<p class="placeholder-text">请先选择小说项目</p>';
+            return;
+        }
+        setStatus(`正在加载小说「${state.novelName}」的替换词典...`, 'info');
+        try {
+            // Note: We use _t parameter to prevent caching for dynamic content
+            const data = await fetchFromServer(`/api/novel/${encodeURIComponent(state.novelName)}/replace_dict?_t=${new Date().getTime()}`);
+            state.replaceDict = data.rules || [];
+            renderReplaceRules();
+            setStatus(`小说「${state.novelName}」替换词典加载成功。`, 'success');
+        } catch (error) {
+            setStatus(`加载替换词典失败: ${error.message}`, 'error');
+            state.replaceDict = [];
+            renderReplaceRules();
+        }
+    }
+
+    async function saveReplaceDict() {
+        if (!state.novelName) {
+            setStatus('请先选择小说项目再保存替换词典。', 'error');
+            return;
+        }
+        setStatus(`正在保存小说「${state.novelName}」的替换词典...`, 'info');
+        try {
+            await fetchFromServer(`/api/novel/${encodeURIComponent(state.novelName)}/replace_dict`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rules: state.replaceDict })
+            });
+            setStatus(`小说「${state.novelName}」替换词典保存成功。`, 'success');
+        } catch (error) {
+            setStatus(`保存替换词典失败: ${error.message}`, 'error');
+        }
+    }
+
+    function renderReplaceRules(filterTerm = '') {
+        const listEl = dom.replaceRulesList;
+        listEl.innerHTML = '';
+        
+        const lowerFilterTerm = filterTerm.toLowerCase().trim();
+        const filteredRules = state.replaceDict.filter(rule => 
+            rule.original_word.toLowerCase().includes(lowerFilterTerm) ||
+            rule.replacement_word.toLowerCase().includes(lowerFilterTerm) ||
+            (rule.description && rule.description.toLowerCase().includes(lowerFilterTerm))
+        );
+
+        if (filteredRules.length === 0) {
+            listEl.innerHTML = '<p class="placeholder-text">暂无替换规则或没有匹配项。</p>';
+            return;
+        }
+
+        filteredRules.forEach((rule, index) => { // 这里的 index 只是为了渲染，不再存储到 dataset
+            const li = document.createElement('li');
+            // 为了调试方便，可以暂时存储规则的原始词和替换词
+            li.dataset.originalWord = rule.original_word;
+            li.dataset.replacementWord = rule.replacement_word;
+            li.innerHTML = `
+                <div class="replace-rule-display" style="display: flex; align-items: center; justify-content: space-between; flex-grow: 1;">
+                    <div>
+                        <span class="original-word" style="font-weight: bold;">${rule.original_word}</span> 
+                        <span style="color: var(--text-color-secondary); margin: 0 0.5rem;">→</span> 
+                        <span class="replacement-word" style="color: var(--primary-color);">${rule.replacement_word}</span>
+                        ${rule.description ? `<span class="description" style="margin-left: 1rem; font-size: 0.85em; color: var(--text-color-secondary);">(${rule.description})</span>` : ''}
+                    </div>
+                    <div class="rule-actions" style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-danger btn-delete-rule">删除</button>
+                    </div>
+                </div>
+            `;
+            listEl.appendChild(li);
+        });
+    }
+
+    // === 6. INITIALIZATION ===    
+	async function initialize() {
+        setStatus('正在初始化应用...');
+        try {
+            state.globalConfig = await fetchFromServer(`/api/get_llm_config?_t=${new Date().getTime()}`);
+            
+            // --- 配置加载成功后的逻辑 ---
+            const mainModelSelect = dom.llmModelSelector;
+            mainModelSelect.innerHTML = '';
+            if (state.globalConfig.models) {
+                for (const modelId in state.globalConfig.models) {
+                    const model = state.globalConfig.models[modelId];
+                    const option = document.createElement('option');
+                    option.value = modelId;
+                    option.textContent = model.display_name || modelId;
+                    mainModelSelect.appendChild(option);
+                }
+            }
+
+            state.selectedLLM = state.globalConfig.general?.default_model || 'gemini-2.5-flash';
+            mainModelSelect.value = state.selectedLLM;
+			
+			
+			const elevenlabsConfig = state.globalConfig.elevenlabs; // elevenlabs配置
+			const hasElevenlabsKey = elevenlabsConfig && elevenlabsConfig.api_key && elevenlabsConfig.api_key.trim() !== '';
+            
+            if (hasElevenlabsKey) {
+                dom.transcribeBtn.style.display = 'inline-flex'; // 如果有 Key，则显示按钮
+                dom.transcribeBtn.title = ''; // 清除提示，禁用状态由文件选择决定
+            } else {
+                dom.transcribeBtn.style.display = 'none'; // 没有 Key，则隐藏按钮
+                setStatus('ElevenLabs API Key 未配置，自动识别文本功能已隐藏。', 'warning');
+            }
+            
+        } catch (error) {
+            setStatus('加载全局配置失败，将使用默认设置。', 'warning');
+            // --- 提供一个默认的 globalConfig 结构，确保后续代码不会因 undefined 出错 ---
+            state.globalConfig = {
+                general: { default_model: 'gemini-2.5-flash' },
+                models: {
+                    'gemini-2.5-flash': { display_name: 'Gemini Flash' },
+                    'qwen-plus-latest': { display_name: '通义千问 Plus' }
+                },
+                audio_export: { format: 'mp3', quality: '192k' }
+            };
+            // 同样需要填充主界面的下拉框
+            const mainModelSelect = dom.llmModelSelector;
+            mainModelSelect.innerHTML = '';
+             for (const modelId in state.globalConfig.models) {
+                const model = state.globalConfig.models[modelId];
+                const option = document.createElement('option');
+                option.value = modelId;
+                option.textContent = model.display_name || modelId;
+                mainModelSelect.appendChild(option);
+            }
+            mainModelSelect.value = state.globalConfig.general.default_model;
+			
+            dom.transcribeBtn.style.display = 'none';
+        }
+
+        // --- 将这两个调用移到 try...catch 之后，确保它们总能被执行 ---
+		await loadNovels();
+		await loadTimbres(); // 1. 先加载所有数据并填充UI控件
+		
+		renderTimbreList();
+		updateRelatedRolesPopovers();
+        setStatus('初始化完成。', 'info');
+    }
+    
+    initialize();
+});
+</script>
+
+<!-- NEW: Audio Player Modal -->
+<div id="audioPlayerModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 600px;">
+        <h3 id="playerModalTitle" class="modal-header">正在播放...</h3>
+        <div class="player-modal-body">
+            <div class="player-controls">
+                <button id="playerPlayPauseBtn" class="btn btn-primary">⏸️</button>
+            </div>
+            <div class="player-timeline">
+                <span id="playerCurrentTime" class="time-display">00:00</span>
+                <input type="range" id="playerProgressBar" class="progress-bar-slider" value="0" step="0.1">
+                <span id="playerTotalDuration" class="time-display">00:00</span>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button id="playerModalCloseBtn" class="btn">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- NEW: Timbres Management Modal -->
+<div id="timbresManageModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 900px; height: 85vh; display: flex; flex-direction: column;">
+        <h3 class="modal-header">音色库管理器</h3>
+        <div class="manager-container" style="display: flex; flex-grow: 1; gap: 1rem; overflow: hidden;">
+            <!-- Left Panel: Categories -->
+            <div class="manager-panel" style="flex: 0.8; border: 1px solid var(--border-color); border-radius: 4px; display: flex; flex-direction: column;">
+                <div id="manager-category-list" class="scrollable-content" style="padding: 0.5rem;"></div>
+                <div class="input-group" style="padding: 0.5rem; border-top: 1px solid var(--border-color); margin-bottom: 0; display:flex; gap: 0.5rem;">
+                    <input type="text" id="managerNewCategoryInput" placeholder="输入新分类名">
+                    <button id="managerAddCategoryBtn" class="btn btn-primary" style="flex-shrink: 0;">创建</button>
+                </div>
+            </div>
+            <!-- Right Panel: Timbres in selected category -->
+            <div class="manager-panel" style="flex: 2; border: 1px solid var(--border-color); border-radius: 4px; display: flex; flex-direction: column;">
+                <h4 id="manager-timbres-title" style="padding: 0.8rem; margin: 0; border-bottom: 1px solid var(--border-color); flex-shrink: 0;">选择一个分类</h4>
+                <div id="manager-timbres-list" class="scrollable-content info-list"></div>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button id="closeTimbresManageBtn" class="btn">关闭</button>
+        </div>
+    </div>
+</div>
+</body>
+</html>

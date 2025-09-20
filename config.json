@@ -1,0 +1,45 @@
+{
+    "general": {
+        "default_model": "gemini",
+        "proxy": {
+            "enabled": true,
+            "protocol": "socks5h",
+            "address": "127.0.0.1",
+            "port": "1080"
+        },
+        "default_tts_model": "cosyvoice_v2"
+    },
+    "audio_export": {
+        "format": "mp3",
+        "quality": "256k"
+    },
+    "tts_models": {
+        "cosyvoice_v2": {
+            "display_name": "CosyVoice2",
+            "endpoint": "http://127.0.0.1:5010/api/tts"
+        },
+        "indextts_v1.5": {
+            "display_name": "IndexTTS V1.5",
+            "endpoint": "http://127.0.0.1:5020/api/tts"
+        }
+    },
+    "models": {
+        "gemini": {
+            "display_name": "Gemini",
+            "model_name": "gemini-2.5-flash",
+            "api_key": "",
+            "max_chars": 8000,
+            "use_proxy": true
+        },
+        "aliyun": {
+            "display_name": "阿里云平台",
+            "model_name": "deepseek-r1",
+            "api_key": "",
+            "max_chars": 6000,
+            "use_proxy": false
+        }
+    },
+    "elevenlabs": {
+        "api_key": ""
+    }
+}
